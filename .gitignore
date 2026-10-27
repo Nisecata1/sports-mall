@@ -1,0 +1,12 @@
+/target/
+/.idea/
+/.classpath
+/.project
+/.settings/
+*.iml
+*.log
+/logs/
+/.env
+/application-local.properties
+/config/*-local.properties
+.DS_Store
