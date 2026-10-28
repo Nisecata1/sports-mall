@@ -14,7 +14,7 @@ import java.util.List;
 /** 只负责从已有表中读取商品，所有查询入口集中在这里。 */
 public final class ItemDao {
     private static final String FIND_ALL = """
-            SELECT items.item_id, items.title, items.category_id,
+            SELECT items.item_id, items.title, items.price, items.category_id,
                    categories.name AS category_name
             FROM items
             JOIN categories ON items.category_id = categories.category_id
@@ -36,6 +36,7 @@ public final class ItemDao {
                 items.add(new ItemView(
                         results.getLong("item_id"),
                         results.getString("title"),
+                        results.getBigDecimal("price"),
                         results.getLong("category_id"),
                         results.getString("category_name")));
             }

@@ -40,10 +40,11 @@ public final class Main {
                 if (items.isEmpty()) {
                     System.out.println("查询结果为空，没有可显示的商品。");
                 } else {
-                    System.out.println("商品编号 | 商品名称 | 分类编号 | 分类名称");
+                    System.out.println("商品编号 | 商品名称 | 单价（元） | 分类编号 | 分类名称");
                     for (ItemView item : items) {
-                        System.out.printf("%d | %s | %d | %s%n",
-                                item.itemId(), item.title(), item.categoryId(), item.categoryName());
+                        System.out.printf("%d | %s | %s | %d | %s%n",
+                                item.itemId(), item.title(), item.price().setScale(2).toPlainString(),
+                                item.categoryId(), item.categoryName());
                     }
                 }
                 System.out.printf("共读取 %d 条商品。%n", items.size());
