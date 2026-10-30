@@ -1,5 +1,10 @@
 package com.sportsmall.exception;
 
+import com.mongodb.MongoCommandException;
+import com.mongodb.MongoException;
+import com.mongodb.MongoSecurityException;
+import com.mongodb.MongoTimeoutException;
+
 import java.sql.SQLException;
 
 /** 保存可用于排查的错误代码；面向用户的消息不包含连接密码。 */
@@ -18,6 +23,20 @@ public final class MallDataAccessException extends RuntimeException {
 
     public String code() {
         return code;
+    }
+
+    public static MallDataAccessException fromMongoFailure(MongoException failure) {
+        if (failure instanceof MongoTimeoutException) {
+            return new MallDataAccessException("MONGO_CONNECTION_FAILED",
+                    "无法连接 MongoDB。请确认服务端窗口仍在运行，并核对 mongo.uri 的地址与端口。", failure);
+        }
+        if (failure instanceof MongoSecurityException
+                || (failure instanceof MongoCommandException command && command.getErrorCode() == 13)) {
+            return new MallDataAccessException("MONGO_PERMISSION_DENIED",
+                    "MongoDB 认证或读取权限不足，请检查连接凭据及商城库授权。", failure);
+        }
+        return new MallDataAccessException("MONGO_OPERATION_FAILED",
+                "MongoDB 详情查询未完成，请核对商城数据库与 item_details 集合。", failure);
     }
 
     public static MallDataAccessException fromDatabaseFailure(Throwable failure) {

@@ -10,7 +10,7 @@ Gitee 仓库：[Nisegitee/sports-mall](https://gitee.com/Nisegitee/sports-mall)�
 
 ## 本轮目标
 
-已完成 MySQL 五张基础表及商品单价迁移，现有训练篮球单价为 100.00。当前让 Java 商品查询携带并显示单价，继续沿用同一正式工程。程序仍只查询实际数据，不自动建表或插入记录。
+已完成 MySQL 五张基础表及商品单价迁移，训练篮球单价为100.00。2026-10-30用户已手操创建MongoDB的item_details集合和item_id唯一索引，并新增、读回训练篮球的Long类型编号1详情。同日16:54:39，用户运行本工程JAR，已实际确认MySQL商品、单价、分类与MongoDB说明、语言和空图片列表组合显示正确。程序只查询已有记录，不自动建表、插入记录或执行初始化脚本。
 
 这是正式工程的首版入口，不是最终提交版本。完整要求与当前进度见本地核对笔记 `docs/需求对照与进度.md`，该笔记不随源码仓库上传。商品录入、页面、MongoDB 详情等均须继续实现；仅能读取一件商品不能算完整商品模块完成。
 
@@ -67,9 +67,9 @@ target\sports-mall-0.1.0.jar
 
 **原理：**将 Java 源码编译，并将运行所需的库打进可执行 JAR。构建成功说明程序已准备好，实际数据库连接在下一步验证。
 
-## 4. 输入你自己的 MySQL 密码，读取真实商品
+## 4. 输入你自己的 MySQL 密码，读取两库中的真实商品
 
-确认 MySQL 仍使用你已初始化的数据目录，并监听本机 18306。默认账号是你已经验证过的 `root`；密码不放入源码。
+保留MySQL与MongoDB服务端窗口：MySQL监听本机18306，MongoDB监听本机27017。MySQL默认账号是你已验证过的root，密码不放入源码；MongoDB沿用你当前本机连接配置。
 
 在刚才同一 PowerShell 中执行：
 
@@ -80,18 +80,22 @@ java -jar .\target\sports-mall-0.1.0.jar
 
 输入时显示星号。密码只传给这个终端运行的程序，不写入项目文件或永久环境变量。关闭终端后，下次需重新输入。
 
-**原理：**Java 从连接池取得 JDBC 连接，由 DAO 执行 JOIN 查询，用 ItemView 携带商品、十进制单价和分类，再由 Main 显示。
+**原理：**MySQL的ItemDao读取商品、十进制单价和分类，MongoDB的ItemDetailDao读取同一item_id的说明、图片和语言，CatalogService组合两份结果，Main负责显示。MongoClient在本次程序运行内复用，并在程序结束时关闭。
 
 若数据库仍保留你前面录入的数据，预期类似：
 
 ```text
 连接成功：MySQL 8.4.13 / sports_mall
+连接成功：MongoDB / sports_mall
 商品编号 | 商品名称 | 单价（元） | 分类编号 | 分类名称
 1 | 训练篮球 | 100.00 | 1 | 球类
+  商品说明：训练用篮球，适合日常运球与投篮练习。
+  内容语言：zh-CN
+  商品图片：暂无图片
 共读取 1 条商品。
 ```
 
-这是新版预期示例，实际输出以数据库为准。用户已验证 MySQL 中训练篮球单价为100.00；Java单价扩展已编译打包通过，真实单价输出仍待用户本轮运行确认。此前首版已成功连接MySQL并读取1条商品，UTF-8终端设置也已验证。
+用户已于2026-10-30实际运行并确认上述组合输出，商品编号1、单价100.00、说明、zh-CN语言与“暂无图片”均匹配两库记录；以后输出以实际数据库为准。某商品没有详情时显示“尚未填写”；MongoDB连接或字段类型错误时提示错误，不冒充详情不存在。缺失和连接失败等分支仍需后续集成验证。
 
 如果中文显示成“杩炴帴鎴愬姛”等乱码，先在同一个 PowerShell 中对齐终端编码再运行：
 
@@ -121,10 +125,17 @@ flowchart LR
 | `src/main/java/com/sportsmall/Main.java` | 当前入口 |
 | `src/main/java/com/sportsmall/dao/ItemDao.java` | 从 MySQL 读取商品、单价与分类，用 getBigDecimal 取价 |
 | `src/main/java/com/sportsmall/model/ItemView.java` | 用 BigDecimal 携带单价等一条查询结果，不是数据库表 |
+| `src/main/java/com/sportsmall/config/MongoConfig.java` | 读取MongoDB配置，创建可复用的MongoClient并限制连接等待时间 |
+| `src/main/java/com/sportsmall/dao/mongo/ItemDetailDao.java` | 按item_id读取MongoDB详情，检查BSON编号、数组及嵌套字段的类型 |
+| `src/main/java/com/sportsmall/model/ItemDetail.java` | Java中的商品扩展详情，不重复保存MySQL价格或分类 |
+| `src/main/java/com/sportsmall/service/CatalogService.java` | 按同一个商品编号组合两库结果；详情缺失与读取失败分别处理 |
+| `src/test/java/com/sportsmall/dao/mongo/ItemDetailDaoTest.java` | 检查真实BSON类型映射的边界，不连接或修改数据库 |
 | `src/main/resources/sql/mysql_schema.sql` | 五表目标结构，供新数据库使用；现有表不会被 IF NOT EXISTS 自动改成新结构 |
 | `src/main/resources/sql/mysql_migrate_001_item_price.sql` | 现有商品表补单价的分步迁移，检查后执行一次；不是初始化数据脚本 |
+| `src/main/resources/sql/mongodb_init.js` | mongosh 阶段性脚本：目前只创建商品详情集合、唯一索引及一条详情；其余集合和完整数据量待补 |
 | `docs/需求规格说明书.pdf` | 老师要求的需求规格交付物，V0.1需求基线 |
 | `docs/MySQL_E-R图.png` | 五张表的关系设计，已与用户提供的实际建表结果核对一致 |
+| `docs/MongoDB集合设计.pdf` | Day2要求的四集合目标设计，含字段类型、嵌套与引用、索引与三项聚合口径；设计文档不代表全部已部署 |
 | `docs/需求对照与进度.md` | 本地内部核对笔记，不替代正式需求文档 |
 
 ## 哪些属于课程工程，哪些只是辅助文件
@@ -139,6 +150,7 @@ flowchart LR
 | `docs/需求对照与进度.md` | 本会话添加的核对笔记，不是老师要求的“需求规格说明书” | 开发时保留，最终提交默认不含此笔记 |
 | `docs/需求规格说明书.pdf` | 老师明确要求的需求规格说明书 | 随源码提交至 Gitee，最终按课程要求交付 |
 | `docs/MySQL_E-R图.png` | 老师明确要求的 MySQL E-R 图片 | 五表结构已落实并核对，随本轮源码提交；后续结构变更时同步维护 |
+| `docs/MongoDB集合设计.pdf` | 老师明确要求的四集合设计文档 | V0.1五页PDF已生成并逐页核对；随后续正式源码提交，实施证据另行记录 |
 | `docs/需求规格说明书.md` | PDF 的本地可编辑源稿 | 本轮提交只选 PDF；源稿在本地保留，不自动进入最终提交包 |
 | `docs/历史素材/商品页面草稿.html` | 旧页面草稿，不是已完成界面，也不是规定交付物 | 当前仅归档，最终提交排除未采用草稿 |
 | `target/` | Maven 自动生成的编译文件及 JAR | 可重新构建，已由 `.gitignore` 排除，不随源码提交；当前运行仍使用其中的可执行 JAR |
@@ -148,7 +160,7 @@ flowchart LR
 ## 接下来按要求推进
 
 1. 对应 Day1：Git/Gitee 首版及需求 PDF 均已提交并成功上传，需求 PDF 对应提交为 `8ae73f5`。教师交付与检查按课程安排。
-2. 对应 Day2：五张 MySQL 表及 E-R 图已核对；接下来设计四个 MongoDB 集合，已有数据库继续使用。
+2. 对应 Day2：五张 MySQL 表及 E-R 图已核对并上传；继续四个 MongoDB 集合的设计与实际落实，已有数据库继续使用。
 3. 对应 Day3：补齐 MySQL DDL 与 MongoDB 初始化脚本，在设计明确后按步骤执行。
 4. 继续真实业务功能：完善商品的录入、修改、删除和查询，再接入 MongoDB 详情、多条件查询与分页。此后按要求补其他模块、视图、存储过程、触发器、测试与项目文档。
 
@@ -174,9 +186,64 @@ orders.user_id、item_id 都是必填外键，分别引用用户和商品；同�
 
 items.price → ItemDao 查询及 getBigDecimal 映射 → ItemView.price → Main 打印。数据库新增列后，需要显式补齐查询字段、Java结果对象和显示位置。SQL DECIMAL 对应 Java BigDecimal，全程不转换为 double；输出保持两位小数。
 
-三个源文件已修改并通过 Maven package 编译打包，等待用户实际连接数据库确认输出。未使用用户密码进行工具端数据库访问，也未把编译成功当作集成测试通过；JUnit 5 正式用例仍待实现。
+单价查询与两库组合代码已通过构建，用户已于2026-10-30实连并确认组合展示。工具端未使用用户密码访问数据库，实连证据来自用户终端输出；单元测试和编译结果分别记录。
 
 课程要求使用 IntelliJ IDEA / Eclipse。可以从 [IntelliJ IDEA 官网](https://www.jetbrains.com/idea/download/?section=windows) 安装，核心 Java 功能免费；安装位置与项目源码目录各自独立。通过 Open 选择当前工程的 pom.xml，按 Open as Project 打开，沿用已有工程。项目 SDK 选择已安装的 Temurin JDK21；Maven 使用工程 Wrapper。查看 ItemDao、ItemView、Main 三处改动，再在现有 PowerShell7 构建运行，密码环境变量属于该终端的进程环境。
+
+## MongoDB 商品详情：本轮手操
+
+2026-10-29用户已通过mongosh连接MongoDB8.0.34；2026-10-30用户完成以下创建、索引、插入与读回操作，首条详情_id为6ae36d3bc7e97e0b414a5658、item_id为Long('1')。本节保留操作记录，已完成的本机步骤不重复执行；新环境再按顺序初始化。MongoDB中的同名数据库与MySQL分别存储，由Java按商品编号关联。
+
+[MongoDB集合设计PDF](docs/MongoDB集合设计.pdf)记录四集合的目标结构、索引及聚合口径。这是Day2设计交付物；本轮手操先落实其中一条商品详情，尚不等于四集合部署及完整业务完成。
+
+### 1. 创建商品详情集合
+
+```javascript
+use sports_mall
+db.createCollection("item_details")
+```
+
+集合组织同类文档，一条文档表示一件商品的一整份详情。createCollection执行成功后，库和空集合实际存在；只执行use只是选定数据库名称。这里没有为每个字段建表，字段随下一步文档保存。
+
+### 2. 限定每个商品至多一份详情
+
+```javascript
+db.item_details.createIndex(
+  { item_id: 1 },
+  { name: "uq_item_details_item_id", unique: true }
+)
+```
+
+unique限制item_id不重复，实现本工程的一商品一详情规则。索引定义中的1表示升序，不是商品编号。该索引不检查MySQL中商品是否存在；训练篮球编号1来自已经确认的MySQL记录，后续Java录入时还需检查跨库关联。
+
+### 3. 保存训练篮球的详情
+
+```javascript
+db.item_details.updateOne(
+  { item_id: Long("1") },
+  {
+    $setOnInsert: {
+      description: "训练用篮球，适合日常运球与投篮练习。",
+      images: [],
+      metadata: { language: "zh-CN" }
+    }
+  },
+  { upsert: true }
+)
+```
+
+这段指令按item_id找详情；没有时插入，有时保留，重复粘贴不会新增另一份或覆盖之后编辑的内容。Long明确保存64位整数，与MySQL的BIGINT对应；不是把编号保存为字符串。description为说明文字，images为图片列表（目前没有真实图片，先为空），metadata为嵌套对象，language为其中的语言标记。此处说明文字与语言值是商品示例内容，不是老师规定的固定值。
+
+### 4. 读出刚保存的数据
+
+```javascript
+db.item_details.findOne({ item_id: Long("1") })
+db.getCollectionNames()
+```
+
+用户已成功读到训练篮球详情。MongoDB自动生成的_id标识本条文档；item_id用于关联MySQL商品，两者作用不同。item_id唯一索引相当于额外的唯一规则，不会把它改成文档主键。MySQL商品表保留编号、名称、分类、单价等基础信息，MongoDB保存说明、图片和扩展信息，Java组合展示已由用户实际运行确认。
+
+同样的创建、索引、插入与读取操作已保存到resources/sql/mongodb_init.js，便于后续重放；脚本遇到已有集合或已有商品详情会保留它们。手操已完成时无需再运行脚本。该脚本目前只覆盖1个集合、1条详情，不代表四集合、每集合至少20条、日志100+、三项聚合或完整初始化已经完成。最终以用户实际输出更新执行状态。
 
 ## 实现约定与后续事项
 
@@ -185,8 +252,8 @@ items.price → ItemDao 查询及 getBigDecimal 映射 → ItemView.price → Ma
 - 首次只读连接沿用你已验证的本机账号；进入完整写入功能时完善应用专用账号与权限。
 - 当前连接参数仅面向本机开发：关闭 TLS 并允许认证公钥获取。部署时需按部署环境另行配置。
 - 用户已完成 price 迁移，现有训练篮球单价 100.00。订单 amount 字段已创建；自动读取单价、保存下单金额及维持历史金额的行为仍待 Java 下单流程实现。
-- 当前只声明了 JUnit 5 依赖，尚未完成正式测试用例与测试报告，不能以构建成功替代测试。
-- Git/Gitee 已初始化并推送首版 `1eed789`。当前只有一个提交日期；后续持续保留真实提交，不伪造前 11 天记录。
+- 已有4项JUnit5字段映射测试通过；完整业务、权限、事务、两库集成测试和正式测试报告仍待补齐。
+- Git/Gitee 已初始化；截至2026-10-28共4次提交、2个真实提交日期，最近1fe57ca已推送。后续持续保留真实提交，不伪造前 11 天记录。
 - 代码使用 AI 辅助编写；用户亲手配置和运行。最终按老师要求标注大模型使用，保存真实开发、测试证据。
 
 ## 连接错误的处理
@@ -195,6 +262,16 @@ items.price → ItemDao 查询及 getBigDecimal 映射 → ItemView.price → Ma
 - `CONNECTION_FAILED`：确认 MySQL 服务窗口仍运行、端口为 18306。
 - `LOGIN_FAILED`：输入你后来设置的新密码，不是初始化时的旧临时密码。
 - `DATABASE_NOT_FOUND` / `TABLE_NOT_FOUND`：核对是否连接到已有商城数据的实例，先检查，不重复初始化数据目录。
+- `MONGO_CONNECTION_FAILED`：保留MongoDB服务端窗口，核对mongo.uri中的地址与端口。
+- `MONGO_DATA_INVALID`：读取到了详情，但编号、说明、图片数组或语言类型不符合设计；与“尚未填写”不同。
+
+## 两库组合检查记录（2026-10-30）
+
+- 用户已真实新增并读回MongoDB商品1详情，_id为6ae36d3bc7e97e0b414a5658。
+- 已加入官方MongoDB同步驱动5.13.0、配置、DAO、业务结果对象及CatalogService；Java仅查询，不执行初始化或写入。
+- 使用已有JDK21与Maven Wrapper运行clean package成功，4项JUnit5测试全部通过，覆盖Long编号与空图片数组、拒绝字符串编号、拒绝非字符串图片项、拒绝缺失语言；这些是内存中的BSON映射测试，不连接数据库。
+- 首次驱动下载直连超时，构建时仅在该进程使用本机已有代理127.0.0.1:10808重试成功，未改全局Maven设置、系统网络或工程配置。依赖现已缓存。
+- 用户于2026-10-30 16:54:39运行JAR，成功连接MySQL8.4.13 / sports_mall与MongoDB / sports_mall，显示训练篮球100.00元、分类球类、商品说明、语言zh-CN及暂无图片，读取总数1。这确认了本轮只读组合正常流程；四集合、完整CRUD、分页、日志、订单与统计功能仍待推进。
 
 ## 官方参考
 
