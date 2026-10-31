@@ -1,6 +1,7 @@
 package com.sportsmall;
 
 import com.zaxxer.hikari.HikariDataSource;
+import com.sportsmall.cli.RegisterCommand;
 import com.mongodb.MongoException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoDatabase;
@@ -32,7 +33,16 @@ public final class Main {
         // 统一 Windows 终端和重定向输出的中文编码。
         System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
         System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
-        int exitCode = run();
+        int exitCode;
+        if (args.length == 0) {
+            exitCode = run();
+        } else if (args.length == 1 && "register".equals(args[0])) {
+            exitCode = RegisterCommand.run();
+        } else {
+            System.out.println("运行商城：java -jar .\\target\\sports-mall-0.1.0.jar");
+            System.out.println("注册账号：java -jar .\\target\\sports-mall-0.1.0.jar register");
+            exitCode = args.length == 1 && ("help".equals(args[0]) || "--help".equals(args[0])) ? 0 : 1;
+        }
         if (exitCode != 0) {
             System.exit(exitCode);
         }

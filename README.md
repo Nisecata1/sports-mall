@@ -10,9 +10,11 @@ Gitee 仓库：[Nisegitee/sports-mall](https://gitee.com/Nisegitee/sports-mall)�
 
 ## 本轮目标
 
-已完成 MySQL 五张基础表及商品单价迁移，训练篮球单价为100.00。2026-10-30用户已手操创建MongoDB的item_details集合和item_id唯一索引，并新增、读回训练篮球的Long类型编号1详情。同日16:54:39，用户运行本工程JAR，已实际确认MySQL商品、单价、分类与MongoDB说明、语言和空图片列表组合显示正确。程序只查询已有记录，不自动建表、插入记录或执行初始化脚本。
+已完成 MySQL 五张基础表及商品单价迁移，训练篮球单价为100.00。2026-10-30用户已手操创建MongoDB的item_details集合和item_id唯一索引，并新增、读回训练篮球的Long类型编号1详情。同日16:54:39，用户运行本工程JAR，已实际确认MySQL商品、单价、分类与MongoDB说明、语言和空图片列表组合显示正确。默认商品查询入口只读取已有记录；建库与初始化脚本须按部署步骤另行执行。
 
-这是正式工程的首版入口，不是最终提交版本。完整要求与当前进度见本地核对笔记 `docs/需求对照与进度.md`，该笔记不随源码仓库上传。商品录入、页面、MongoDB 详情等均须继续实现；仅能读取一件商品不能算完整商品模块完成。
+用户随后已确认MongoDB四集合齐全，文档数为item_details=1，其余三集合=0。2026-10-31，用户通过register命令成功创建mall_user01，Java返回编号1；MySQL回读确认user_id=1、role=USER、status=1、password_hash以pbkdf2_sha256开头。这确认了注册正常流程，重复账号等真实数据库分支仍待后续验收。注册固定USER/status=1，不自动生成管理员、不填写档案，也不执行初始化脚本；默认无参数入口仍查询商品。
+
+这是正式工程的阶段版本。完整要求与当前进度见本地核对笔记 `docs/需求对照与进度.md`，该笔记不随源码仓库上传。登录、商品维护、订单、评论和统计等均须继续实现；读取一件商品及注册一个用户不等于整个项目完成。
 
 ## 1. 当前正式工程目录
 
@@ -97,15 +99,19 @@ java -jar .\target\sports-mall-0.1.0.jar
 
 用户已于2026-10-30实际运行并确认上述组合输出，商品编号1、单价100.00、说明、zh-CN语言与“暂无图片”均匹配两库记录；以后输出以实际数据库为准。某商品没有详情时显示“尚未填写”；MongoDB连接或字段类型错误时提示错误，不冒充详情不存在。缺失和连接失败等分支仍需后续集成验证。
 
-如果中文显示成“杩炴帴鎴愬姛”等乱码，先在同一个 PowerShell 中对齐终端编码再运行：
+如果中文显示成“杩炴帴鎴愬姛”或“�̳��û�”等乱码，先按Ctrl+C退出正在等待输入的Java程序，回到PS提示符，再在同一个PowerShell中对齐终端编码并重新运行：
 
 ```powershell
+chcp 65001
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
 java -jar .\target\sports-mall-0.1.0.jar
 ```
 
-这只改变当前终端的文本编码设置，不修改数据库或重新编译；如果换了终端，需要按前文重新输入密码。
+注册时把最后一行改为java -jar .\target\sports-mall-0.1.0.jar register。65001是UTF-8代码页；InputEncoding/OutputEncoding对齐控制台读写，$OutputEncoding对齐PowerShell向外部程序传递文本的编码。Java的Console与System.out使用各自的输出路径，Main中固定System.out为UTF-8并不自动改变Console的编码；因此应在启动Java之前完成设置，不能只设置普通输出。此操作属于终端交互层，让用户名、邮箱和提示文字在键盘、Java和屏幕之间正确传递，不改变注册规则或数据库结构，也不需要重新编译。新终端应重新设置编码及MALL_DB_PASSWORD。
+
+官方说明：[Java Console.charset()](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/Console.html#charset())、[Windows chcp](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chcp)。
 
 ```mermaid
 flowchart LR
@@ -129,10 +135,14 @@ flowchart LR
 | `src/main/java/com/sportsmall/dao/mongo/ItemDetailDao.java` | 按item_id读取MongoDB详情，检查BSON编号、数组及嵌套字段的类型 |
 | `src/main/java/com/sportsmall/model/ItemDetail.java` | Java中的商品扩展详情，不重复保存MySQL价格或分类 |
 | `src/main/java/com/sportsmall/service/CatalogService.java` | 按同一个商品编号组合两库结果；详情缺失与读取失败分别处理 |
+| `src/main/java/com/sportsmall/cli/RegisterCommand.java` | 终端注册入口，收集输入并隐藏密码，显示账号摘要 |
+| `src/main/java/com/sportsmall/service/UserRegistrationService.java` | 注册业务层：输入与确认密码校验、生成密码哈希，再调用DAO |
+| `src/main/java/com/sportsmall/dao/mysql/UserDao.java` | 用PreparedStatement保存普通账号，返回自增编号，处理唯一键冲突 |
+| `src/main/java/com/sportsmall/util/PasswordHasher.java` | JDK的PBKDF2加盐密码哈希与校验，供注册及后续登录复用 |
 | `src/test/java/com/sportsmall/dao/mongo/ItemDetailDaoTest.java` | 检查真实BSON类型映射的边界，不连接或修改数据库 |
 | `src/main/resources/sql/mysql_schema.sql` | 五表目标结构，供新数据库使用；现有表不会被 IF NOT EXISTS 自动改成新结构 |
 | `src/main/resources/sql/mysql_migrate_001_item_price.sql` | 现有商品表补单价的分步迁移，检查后执行一次；不是初始化数据脚本 |
-| `src/main/resources/sql/mongodb_init.js` | mongosh 阶段性脚本：目前只创建商品详情集合、唯一索引及一条详情；其余集合和完整数据量待补 |
+| `src/main/resources/sql/mongodb_init.js` | mongosh阶段性脚本：四集合、首批查询索引及一条商品详情；完整测试数据、聚合和业务写入仍待补齐 |
 | `docs/需求规格说明书.pdf` | 老师要求的需求规格交付物，V0.1需求基线 |
 | `docs/MySQL_E-R图.png` | 五张表的关系设计，已与用户提供的实际建表结果核对一致 |
 | `docs/MongoDB集合设计.pdf` | Day2要求的四集合目标设计，含字段类型、嵌套与引用、索引与三项聚合口径；设计文档不代表全部已部署 |
@@ -243,7 +253,109 @@ db.getCollectionNames()
 
 用户已成功读到训练篮球详情。MongoDB自动生成的_id标识本条文档；item_id用于关联MySQL商品，两者作用不同。item_id唯一索引相当于额外的唯一规则，不会把它改成文档主键。MySQL商品表保留编号、名称、分类、单价等基础信息，MongoDB保存说明、图片和扩展信息，Java组合展示已由用户实际运行确认。
 
-同样的创建、索引、插入与读取操作已保存到resources/sql/mongodb_init.js，便于后续重放；脚本遇到已有集合或已有商品详情会保留它们。手操已完成时无需再运行脚本。该脚本目前只覆盖1个集合、1条详情，不代表四集合、每集合至少20条、日志100+、三项聚合或完整初始化已经完成。最终以用户实际输出更新执行状态。
+同样的创建、索引、插入与读取操作已保存到resources/sql/mongodb_init.js，便于后续重放；脚本遇到已有集合或已有商品详情会保留它们。脚本现已继续补齐以下三个集合和首批索引，但用户实际执行状态另行记录；不代表每集合至少20条、日志100+、三项聚合或完整初始化已经完成。
+
+## 补齐评论与两类日志：本轮手操
+
+本轮在mongosh的sports_mall库执行。MySQL用户表尚无已确认的业务账号，先创建空集合及索引；后续注册、登录、浏览和评论流程写入真正对应的记录。字段类型按集合设计PDF及Java写入校验落实，创建空集合或索引本身不自动设置所有字段的类型和必填规则。
+
+### 1. 创建三个集合
+
+```javascript
+db.createCollection("comments")
+db.createCollection("action_logs")
+db.createCollection("system_logs")
+```
+
+comments保存用户对商品的评论；action_logs保存用户浏览等行为，用于热门排行和用户活动报告；system_logs保存登录及业务操作结果。三类记录会独立增长、分页与统计，因此分别存储。
+
+### 2. 按后续真实查询建立索引
+
+```javascript
+db.comments.createIndex(
+  { item_id: 1, created_at: -1, _id: -1 },
+  { name: "idx_comments_item_time" }
+)
+db.action_logs.createIndex(
+  { created_at: 1, item_id: 1 },
+  { name: "idx_actions_time_item" }
+)
+db.action_logs.createIndex(
+  { user_id: 1, created_at: 1 },
+  { name: "idx_actions_user_time" }
+)
+db.system_logs.createIndex(
+  { timestamp: -1, _id: -1 },
+  { name: "idx_system_time" }
+)
+db.system_logs.createIndex(
+  { user_id: 1, timestamp: -1 },
+  { name: "idx_system_user_time" }
+)
+```
+
+这些均为普通索引：同一商品可有多条评论、同一用户可多次浏览或登录，不对业务编号加unique。评论索引服务“某商品的最新评论”，其查询排序将同时使用created_at和_id倒序；行为日志分别支持时间窗口与某用户活动；系统日志支持时间分页及某用户记录。1表示升序，-1表示降序。空集合上先建立访问路径，性能收益待实际查询与数据量测量，不预先声称提速。
+
+### 3. 查看当前集合与记录数
+
+```javascript
+db.getCollectionNames()
+printjson({
+  item_details: db.item_details.countDocuments({}),
+  comments: db.comments.countDocuments({}),
+  action_logs: db.action_logs.countDocuments({}),
+  system_logs: db.system_logs.countDocuments({})
+})
+```
+
+用户已按上述步骤创建并核对四个集合，文档数分别为1、0、0、0。返回0只表示没有文档，须结合集合列表确认集合已创建。完整初始化脚本重放尚未验收，工具端没有执行这些MongoDB写操作。注册正常流程已由用户确认，下一步实现登录及对应系统日志。
+
+## 注册一个真实商城用户：架构与手操
+
+这条业务的数据路径为：终端RegisterCommand收集输入 → UserRegistrationService校验并生成密码哈希 → UserDao绑定SQL参数 → MySQL users保存账号。入口层不负责SQL，DAO不接收明文密码；数据库唯一约束保证用户名、邮箱分别不重复。
+
+### 1. 从终端进入注册入口
+
+在已设置MALL_DB_PASSWORD、且位于工程根目录的PowerShell7执行。先对齐本终端编码，再启动Java；这些设置只作用于当前终端：
+
+```powershell
+chcp 65001
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+java -jar .\target\sports-mall-0.1.0.jar register
+```
+
+操作原理：Main识别register参数，转到交互入口。架构目的：入口层选择要执行的业务；MySQL连接密码仍来自当前终端环境，与接下来新设的商城密码各有用途。默认不加参数仍查询商品。注册只需要MySQL服务，不访问MongoDB；登录写MongoDB系统日志将在下一步实现。
+
+### 2. 输入自己的账号信息
+
+依次填写商城用户名、邮箱、可空电话、商城密码及确认密码。用户名最多50字符、邮箱最多100、电话最多20；邮箱做基础格式校验。密码输入不回显，不会显示星号；输入后按回车。注册没有额外的复杂强度评分门槛，密码不做trim。
+
+操作原理：Service检查必填、长度和两次密码一致，再调用JDK自带PBKDF2WithHmacSHA256，使用随机16字节盐、600000次迭代、256位摘要生成存储串，字段仍是既有password_hash VARCHAR(255)。随机盐、迭代次数和摘要一起保存供后续登录验证，不存明文，登录也不需要解密。此为要求书允许的同类密码哈希实现，参数参考OWASP密码存储指南，不是新增作业评分要求。
+
+架构目的：业务层统一注册规则；DAO使用PreparedStatement保存USER角色、status=1及可空电话，由MySQL生成账号编号及时间。角色不接受注册者输入，重复用户名或邮箱由数据库唯一约束拒绝并返回可理解提示。
+
+成功时应显示“注册成功：用户编号=实际编号，用户名=实际输入，邮箱=实际输入，角色=USER”。实际编号以数据库生成为准，不保证从1开始；输出与日志不包含密码或完整哈希。
+
+### 3. 从数据层读回账号
+
+在MySQL客户端中执行：
+
+```sql
+USE sports_mall;
+SELECT user_id, username, role, status,
+       LEFT(password_hash, 13) AS password_scheme
+FROM users
+ORDER BY user_id DESC
+LIMIT 5;
+```
+
+操作原理：直接读取最新用户记录，password_scheme只显示算法标记pbkdf2_sha256，不展示完整哈希。架构目的：确认终端上的注册结果已经落到MySQL存储层；用户账号与数据库root账号分别管理。新增账号此时尚无profile，尚未登录，三个MongoDB评论/日志集合不因注册自动增加记录。
+
+### 本轮验证范围
+
+clean package已在JDK21及Maven Wrapper下完成，18项JUnit5测试全部通过：旧商品映射4项、注册业务11项、密码哈希3项。测试覆盖成功输入、空值/长度/邮箱格式、两次密码不一致、重复/保存失败的结果传递、随机盐、正确密码与错误密码的校验；不连接或修改真实数据库。2026-10-31用户实际完成CLI隐藏输入、MySQL插入和回读，账号mall_user01编号1、USER/status=1与哈希算法标记一致，中文提示正常。真实重复键处理、登录和其他业务仍需后续验证。
 
 ## 实现约定与后续事项
 
@@ -252,7 +364,7 @@ db.getCollectionNames()
 - 首次只读连接沿用你已验证的本机账号；进入完整写入功能时完善应用专用账号与权限。
 - 当前连接参数仅面向本机开发：关闭 TLS 并允许认证公钥获取。部署时需按部署环境另行配置。
 - 用户已完成 price 迁移，现有训练篮球单价 100.00。订单 amount 字段已创建；自动读取单价、保存下单金额及维持历史金额的行为仍待 Java 下单流程实现。
-- 已有4项JUnit5字段映射测试通过；完整业务、权限、事务、两库集成测试和正式测试报告仍待补齐。
+- 现有18项JUnit5测试通过，覆盖商品详情映射、注册校验与密码哈希；用户已确认真实注册写入。登录、权限、事务、完整集成测试和正式测试报告仍待补齐。
 - Git/Gitee 已初始化；截至2026-10-28共4次提交、2个真实提交日期，最近1fe57ca已推送。后续持续保留真实提交，不伪造前 11 天记录。
 - 代码使用 AI 辅助编写；用户亲手配置和运行。最终按老师要求标注大模型使用，保存真实开发、测试证据。
 
@@ -278,6 +390,7 @@ db.getCollectionNames()
 - [Maven Wrapper](https://maven.apache.org/wrapper/)
 - [MySQL Connector/J 的 Maven 配置](https://dev.mysql.com/doc/connector-j/en/connector-j-installing-maven.html)
 - [HikariCP](https://github.com/brettwooldridge/HikariCP)
+- [OWASP密码存储指南](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
 
 ## 首版检查记录（2026-10-27）
 
