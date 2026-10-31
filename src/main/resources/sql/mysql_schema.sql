@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS items (
     CONSTRAINT chk_items_price CHECK (price > 0)
 ) ENGINE=InnoDB;
 
--- 每单一件商品；amount 由后续 Java 下单流程读取商品单价后保存，不由外键自动复制。
+-- 每单一件商品；amount 由 Java 下单流程在事务内读取商品单价后保存，不由外键自动复制。
 -- status：0 待处理，1 已完成，2 已取消；允许值和状态转换是不同规则。
 CREATE TABLE IF NOT EXISTS orders (
     order_id BIGINT AUTO_INCREMENT PRIMARY KEY,
