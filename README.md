@@ -14,7 +14,7 @@ Gitee 仓库：[Nisegitee/sports-mall](https://gitee.com/Nisegitee/sports-mall)�
 
 用户随后已确认MongoDB四集合齐全，文档数为item_details=1，其余三集合=0。2026-10-31，用户通过register命令成功创建mall_user01，Java返回编号1；MySQL回读确认user_id=1、role=USER、status=1、password_hash以pbkdf2_sha256开头。这确认了注册正常流程，重复账号等真实数据库分支仍待后续验收。注册固定USER/status=1，不自动生成管理员、不填写档案，也不执行初始化脚本；默认无参数入口仍查询商品。
 
-这是正式工程的阶段版本。完整要求与当前进度见本地核对笔记 `docs/需求对照与进度.md`，该笔记不随源码仓库上传。登录、商品维护、订单、评论和统计等均须继续实现；读取一件商品及注册一个用户不等于整个项目完成。
+2026-10-31用户已通过login命令成功登录mall_user01，并在MongoDB读回登录文档：user_id=Long('1')、LOGIN/INFO、LOGIN_SUCCESS、来源127.0.0.1、timestamp=2026-10-31T08:31:23.637Z。该时间与终端北京时间16:31:23一致。这确认了MySQL账号校验和MongoDB登录日志写入的正常流程，异常分支仍需后续集成验证。现有32项JUnit5测试通过。这是正式工程的阶段版本，登录后业务菜单、权限、商品维护、订单、评论和统计等继续推进；本地核对笔记docs/需求对照与进度.md不随源码仓库上传。
 
 ## 1. 当前正式工程目录
 
@@ -137,8 +137,13 @@ flowchart LR
 | `src/main/java/com/sportsmall/service/CatalogService.java` | 按同一个商品编号组合两库结果；详情缺失与读取失败分别处理 |
 | `src/main/java/com/sportsmall/cli/RegisterCommand.java` | 终端注册入口，收集输入并隐藏密码，显示账号摘要 |
 | `src/main/java/com/sportsmall/service/UserRegistrationService.java` | 注册业务层：输入与确认密码校验、生成密码哈希，再调用DAO |
-| `src/main/java/com/sportsmall/dao/mysql/UserDao.java` | 用PreparedStatement保存普通账号，返回自增编号，处理唯一键冲突 |
+| `src/main/java/com/sportsmall/dao/mysql/UserDao.java` | 用PreparedStatement保存普通账号、按用户名读取登录凭据，处理唯一键冲突 |
 | `src/main/java/com/sportsmall/util/PasswordHasher.java` | JDK的PBKDF2加盐密码哈希与校验，供注册及后续登录复用 |
+| `src/main/java/com/sportsmall/cli/LoginCommand.java` | 本机登录入口，隐藏密码，管理两库连接及显示登录结果 |
+| `src/main/java/com/sportsmall/service/UserLoginService.java` | 协调账号核验、状态检查与登录日志，不把连接故障当成密码错误 |
+| `src/main/java/com/sportsmall/model/LoginAccount.java` | 业务层内部凭据，覆盖默认toString以免输出哈希 |
+| `src/main/java/com/sportsmall/model/AuthenticatedUser.java` | 本次核验通过的用户身份，不携带密码或哈希 |
+| `src/main/java/com/sportsmall/dao/mongo/SystemLogDao.java` | 将登录结果写入system_logs，Long编号、BSON日期及嵌套操作信息 |
 | `src/test/java/com/sportsmall/dao/mongo/ItemDetailDaoTest.java` | 检查真实BSON类型映射的边界，不连接或修改数据库 |
 | `src/main/resources/sql/mysql_schema.sql` | 五表目标结构，供新数据库使用；现有表不会被 IF NOT EXISTS 自动改成新结构 |
 | `src/main/resources/sql/mysql_migrate_001_item_price.sql` | 现有商品表补单价的分步迁移，检查后执行一次；不是初始化数据脚本 |
@@ -357,6 +362,67 @@ LIMIT 5;
 
 clean package已在JDK21及Maven Wrapper下完成，18项JUnit5测试全部通过：旧商品映射4项、注册业务11项、密码哈希3项。测试覆盖成功输入、空值/长度/邮箱格式、两次密码不一致、重复/保存失败的结果传递、随机盐、正确密码与错误密码的校验；不连接或修改真实数据库。2026-10-31用户实际完成CLI隐藏输入、MySQL插入和回读，账号mall_user01编号1、USER/status=1与哈希算法标记一致，中文提示正常。真实重复键处理、登录和其他业务仍需后续验证。
 
+## 使用刚注册的账号登录：架构与手操
+
+对应课程要求：MySQL验证用户登录，MongoDB记录登录日志。
+
+```mermaid
+flowchart TD
+    A["终端：输入商城用户名与密码"] --> B["业务层：协调本次登录"]
+    B --> C["UserDao → MySQL users：读取账号"]
+    C --> D["业务层：校验密码哈希、状态与角色"]
+    D --> E["SystemLogDao → MongoDB system_logs：记录结果"]
+    E --> F["终端：显示本次结果"]
+```
+
+### 1. 启动登录入口
+
+保持已使用的MySQL和MongoDB服务窗口运行，在项目根目录的PowerShell执行，沿用当前UTF-8设置及MALL_DB_PASSWORD：
+
+```powershell
+java -jar .\target\sports-mall-0.1.0.jar login
+```
+
+操作原理：Main选择LoginCommand，载入已有连接配置。架构目的：入口层收集操作意图，随后交给业务层协调。本轮JAR已经重新打包，不必再次构建；新开PowerShell时按前文重新设置编码和数据库密码环境变量。
+
+### 2. 输入现有商城账号
+
+用户名输入mall_user01，商城密码输入注册时设置的密码，仍然不回显。程序按用户名查询users，PasswordHasher利用保存的盐、迭代次数及摘要校验输入；不会还原原密码，也不会再创建用户。只有正常状态的USER/ADMIN账号可以通过。
+
+架构目的：UserDao负责读取账号，UserLoginService负责判断身份是否有效。随后SystemLogDao写入登录结果，成功时终端显示：
+
+```text
+登录成功：用户编号=1，用户名=mall_user01，角色=USER
+本次登录结果已保存到MongoDB的sports_mall.system_logs。
+```
+
+本轮login执行完返回PowerShell，不保存跨进程登录状态；登录后业务菜单与操作权限后续在同一工程接入。
+
+### 3. 在MongoDB读回本次登录事件
+
+若mongosh已打开，在其sports_mall提示符执行下方JavaScript。否则另开PowerShell，先连接：
+
+```powershell
+& "C:\develop\MongoDB\shell\bin\mongosh.exe" "mongodb://127.0.0.1:27017"
+```
+
+```javascript
+use sports_mall
+db.system_logs.find(
+  { user_id: Long("1"), log_type: "LOGIN" }
+).sort({ timestamp: -1, _id: -1 }).limit(3)
+```
+
+操作原理：用真实用户编号筛选登录事件，按时间及_id倒序读取最近三条。架构目的：system_logs存储操作发生的记录，与MySQL中的账号资料各有用途；重复登录会新增事件，不会重复创建用户。
+
+正常登录文档应含user_id=Long('1')、log_type='LOGIN'、log_level='INFO'、action_detail.operation='LOGIN_SUCCESS'、action_detail.ip='127.0.0.1'及真实BSON日期timestamp。IP是当前本机命令行入口的回环来源；未来网络入口应记录实际请求来源。文档不保存用户名、邮箱、密码或哈希。
+
+基础输入检查通过后的密码错误、账号不存在和停用账号会生成WARN/LOGIN_FAILED日志；账号不存在时user_id为null，不虚构编号。MySQL查询故障不记作密码错误。MongoDB日志未确认写入时返回LOGIN_LOG_SAVE_FAILED，不显示完整登录流程成功；网络错误下日志可能已写入，因此提示为“未确认保存”。本流程只读MySQL，再写MongoDB，不把它称为两库共同提交的事务。
+
+### 本轮验证范围
+
+2026-10-31已使用JDK21和Wrapper执行离线clean package，32项测试全部通过：原18项、登录业务12项、日志BSON映射2项。新增测试覆盖正常/错误/不存在/停用账号、基础输入、数据库读取故障、日志写入故障及Long/Date/null/嵌套字段类型。单元测试使用内存替代读写和BSON编码，不连接数据库。用户随后实际登录成功并读回MongoDB文档6ae5a75bd907b36d8083710d，用户编号1、LOGIN/INFO、LOGIN_SUCCESS与真实日期字段符合设计；失败登录等实连分支仍待后续验证。
+
 ## 实现约定与后续事项
 
 - 商品必须有分类，分类可以没有上级；因此两处关联字段的可空性不同。
@@ -364,8 +430,8 @@ clean package已在JDK21及Maven Wrapper下完成，18项JUnit5测试全部通�
 - 首次只读连接沿用你已验证的本机账号；进入完整写入功能时完善应用专用账号与权限。
 - 当前连接参数仅面向本机开发：关闭 TLS 并允许认证公钥获取。部署时需按部署环境另行配置。
 - 用户已完成 price 迁移，现有训练篮球单价 100.00。订单 amount 字段已创建；自动读取单价、保存下单金额及维持历史金额的行为仍待 Java 下单流程实现。
-- 现有18项JUnit5测试通过，覆盖商品详情映射、注册校验与密码哈希；用户已确认真实注册写入。登录、权限、事务、完整集成测试和正式测试报告仍待补齐。
-- Git/Gitee 已初始化；截至2026-10-28共4次提交、2个真实提交日期，最近1fe57ca已推送。后续持续保留真实提交，不伪造前 11 天记录。
+- 现有32项JUnit5测试通过；用户已确认真实注册、登录和MongoDB登录日志回读。权限、事务、完整集成测试和正式测试报告继续补齐。
+- 截至2026-10-31，注册里程碑8b85b9c已推送Gitee；本轮继续保存已确认的登录里程碑。10-29没有提交，不回填日期。
 - 代码使用 AI 辅助编写；用户亲手配置和运行。最终按老师要求标注大模型使用，保存真实开发、测试证据。
 
 ## 连接错误的处理
@@ -376,6 +442,10 @@ clean package已在JDK21及Maven Wrapper下完成，18项JUnit5测试全部通�
 - `DATABASE_NOT_FOUND` / `TABLE_NOT_FOUND`：核对是否连接到已有商城数据的实例，先检查，不重复初始化数据目录。
 - `MONGO_CONNECTION_FAILED`：保留MongoDB服务端窗口，核对mongo.uri中的地址与端口。
 - `MONGO_DATA_INVALID`：读取到了详情，但编号、说明、图片数组或语言类型不符合设计；与“尚未填写”不同。
+- `INVALID_CREDENTIALS`：商城用户名或密码不正确；使用注册时设置的商城密码。
+- `ACCOUNT_DISABLED`：商城账号当前不可用。
+- `USER_QUERY_FAILED`：MySQL账号读取未完成，检查MySQL连接与users表。
+- `LOGIN_LOG_SAVE_FAILED`：MongoDB登录日志未确认保存，检查服务窗口、连接配置与system_logs写权限。
 
 ## 两库组合检查记录（2026-10-30）
 
@@ -391,6 +461,7 @@ clean package已在JDK21及Maven Wrapper下完成，18项JUnit5测试全部通�
 - [MySQL Connector/J 的 Maven 配置](https://dev.mysql.com/doc/connector-j/en/connector-j-installing-maven.html)
 - [HikariCP](https://github.com/brettwooldridge/HikariCP)
 - [OWASP密码存储指南](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+- [MongoDB Java文档与BSON类型映射](https://www.mongodb.com/docs/drivers/java/sync/current/data-formats/documents/)
 
 ## 首版检查记录（2026-10-27）
 

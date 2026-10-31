@@ -3,6 +3,7 @@ package com.sportsmall.dao.mysql;
 import com.sportsmall.exception.MallBusinessException;
 import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.RegisteredUser;
+import com.sportsmall.model.LoginAccount;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -12,8 +13,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.Objects;
+import java.util.Optional;
 
-/** 保存商城账号；密码哈希由业务层传入，普通注册固定为 USER。 */
+/** 读写商城账号；密码校验在业务层执行，普通注册固定为 USER。 */
 public final class UserDao {
     private static final String INSERT_USER = """
             INSERT INTO users (username, password_hash, email, phone, role, status)
@@ -22,8 +24,30 @@ public final class UserDao {
 
     private final DataSource dataSource;
 
+    private static final String FIND_LOGIN_ACCOUNT = """
+            SELECT user_id, username, password_hash, role, status
+            FROM users
+            WHERE username = ?
+            """;
+
     public UserDao(DataSource dataSource) {
         this.dataSource = Objects.requireNonNull(dataSource);
+    }
+
+    public Optional<LoginAccount> findForLogin(String username) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(FIND_LOGIN_ACCOUNT)) {
+            statement.setString(1, username);
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) {
+                    return Optional.empty();
+                }
+                return Optional.of(new LoginAccount(rows.getLong("user_id"), rows.getString("username"),
+                        rows.getString("password_hash"), rows.getString("role"), rows.getInt("status")));
+            }
+        } catch (SQLException exception) {
+            throw new MallDataAccessException("USER_QUERY_FAILED", "无法读取商城账号，请检查MySQL连接与users表。");
+        }
     }
 
     public RegisteredUser create(String username, String passwordHash, String email, String phone) {
