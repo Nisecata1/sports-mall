@@ -10,6 +10,7 @@ import com.sportsmall.exception.MallBusinessException;
 import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.AuthenticatedUser;
 import com.sportsmall.service.UserLoginService;
+import com.sportsmall.service.UserAccountService;
 import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,10 +52,13 @@ public final class LoginCommand {
                         new SystemLogDao(mongoClient.getDatabase(mongoConfig.database())));
                 // 本机 CLI 的来源记为回环地址；未来网络入口应传入实际请求来源。
                 AuthenticatedUser user = service.login(username, password, LOCAL_SOURCE_IP);
+                Arrays.fill(password, '\0');
+                password = null;
                 System.out.printf("登录成功：用户编号=%d，用户名=%s，角色=%s%n",
                         user.userId(), user.username(), user.role());
                 System.out.println("本次登录结果已保存到MongoDB的sports_mall.system_logs。");
                 LOG.info("商城用户登录成功，用户编号={}，角色={}", user.userId(), user.role());
+                AccountMenu.run(console, user, new UserAccountService(new UserDao(dataSource)));
             }
             return 0;
         } catch (MallBusinessException exception) {

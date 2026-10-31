@@ -4,6 +4,7 @@ import com.sportsmall.exception.MallBusinessException;
 import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.RegisteredUser;
 import com.sportsmall.model.LoginAccount;
+import com.sportsmall.model.UserAccount;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -30,6 +31,16 @@ public final class UserDao {
             WHERE username = ?
             """;
 
+    private static final String FIND_ACCOUNT_BY_ID = """
+            SELECT user_id, username, email, phone, role, status
+            FROM users
+            WHERE user_id = ?
+            """;
+
+    private static final String UPDATE_ACTIVE_PHONE = """
+            UPDATE users SET phone = ? WHERE user_id = ? AND status = 1
+            """;
+
     public UserDao(DataSource dataSource) {
         this.dataSource = Objects.requireNonNull(dataSource);
     }
@@ -47,6 +58,39 @@ public final class UserDao {
             }
         } catch (SQLException exception) {
             throw new MallDataAccessException("USER_QUERY_FAILED", "无法读取商城账号，请检查MySQL连接与users表。");
+        }
+    }
+
+    public Optional<UserAccount> findAccountById(long userId) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(FIND_ACCOUNT_BY_ID)) {
+            statement.setLong(1, userId);
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) {
+                    return Optional.empty();
+                }
+                return Optional.of(new UserAccount(rows.getLong("user_id"), rows.getString("username"),
+                        rows.getString("email"), rows.getString("phone"),
+                        rows.getString("role"), rows.getInt("status")));
+            }
+        } catch (SQLException exception) {
+            throw new MallDataAccessException("USER_QUERY_FAILED", "无法读取商城账号资料，请检查MySQL连接与users表。");
+        }
+    }
+
+    public boolean updateActivePhone(long userId, String phone) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(UPDATE_ACTIVE_PHONE)) {
+            if (phone == null) {
+                statement.setNull(1, Types.VARCHAR);
+            } else {
+                statement.setString(1, phone);
+            }
+            statement.setLong(2, userId);
+            return statement.executeUpdate() == 1;
+        } catch (SQLException exception) {
+            throw new MallDataAccessException("USER_UPDATE_FAILED",
+                    "联系方式未确认保存，请重新查看账号资料并检查MySQL连接。");
         }
     }
 

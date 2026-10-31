@@ -14,7 +14,9 @@ Gitee 仓库：[Nisegitee/sports-mall](https://gitee.com/Nisegitee/sports-mall)�
 
 用户随后已确认MongoDB四集合齐全，文档数为item_details=1，其余三集合=0。2026-10-31，用户通过register命令成功创建mall_user01，Java返回编号1；MySQL回读确认user_id=1、role=USER、status=1、password_hash以pbkdf2_sha256开头。这确认了注册正常流程，重复账号等真实数据库分支仍待后续验收。注册固定USER/status=1，不自动生成管理员、不填写档案，也不执行初始化脚本；默认无参数入口仍查询商品。
 
-2026-10-31用户已通过login命令成功登录mall_user01，并在MongoDB读回登录文档：user_id=Long('1')、LOGIN/INFO、LOGIN_SUCCESS、来源127.0.0.1、timestamp=2026-10-31T08:31:23.637Z。该时间与终端北京时间16:31:23一致。这确认了MySQL账号校验和MongoDB登录日志写入的正常流程，异常分支仍需后续集成验证。现有32项JUnit5测试通过。这是正式工程的阶段版本，登录后业务菜单、权限、商品维护、订单、评论和统计等继续推进；本地核对笔记docs/需求对照与进度.md不随源码仓库上传。
+2026-10-31用户已通过login命令成功登录mall_user01，并在MongoDB读回登录文档：user_id=Long('1')、LOGIN/INFO、LOGIN_SUCCESS、来源127.0.0.1、timestamp=2026-10-31T08:31:23.637Z。该时间与终端北京时间16:31:23一致。这确认了MySQL账号校验和MongoDB登录日志写入的正常流程，异常分支仍需后续集成验证。登录里程碑416155f已推送Gitee。
+
+2026-10-31用户已在登录后菜单查看本人账号，并于16:45:01把编号1的电话从未填写改为演示号码010-12345678；程序从MySQL读回新电话，USER角色及正常状态一致，随后正常退出。本人资料查询与电话修改的正常流程已确认，清空及异常分支仍待后续集成验证。现有42项JUnit5测试通过。这是正式工程的阶段版本，其他账号字段修改、管理员权限、档案、商品维护、订单、评论和统计等继续推进；本地核对笔记docs/需求对照与进度.md不随源码仓库上传。
 
 ## 1. 当前正式工程目录
 
@@ -140,6 +142,9 @@ flowchart LR
 | `src/main/java/com/sportsmall/dao/mysql/UserDao.java` | 用PreparedStatement保存普通账号、按用户名读取登录凭据，处理唯一键冲突 |
 | `src/main/java/com/sportsmall/util/PasswordHasher.java` | JDK的PBKDF2加盐密码哈希与校验，供注册及后续登录复用 |
 | `src/main/java/com/sportsmall/cli/LoginCommand.java` | 本机登录入口，隐藏密码，管理两库连接及显示登录结果 |
+| `src/main/java/com/sportsmall/cli/AccountMenu.java` | 登录后菜单，查看本人账号、修改电话及退出 |
+| `src/main/java/com/sportsmall/service/UserAccountService.java` | 用已登录身份限定本人记录，校验电话、检查账号状态并协调保存与回读 |
+| `src/main/java/com/sportsmall/model/UserAccount.java` | 用户可显示资料，不查询或携带密码哈希 |
 | `src/main/java/com/sportsmall/service/UserLoginService.java` | 协调账号核验、状态检查与登录日志，不把连接故障当成密码错误 |
 | `src/main/java/com/sportsmall/model/LoginAccount.java` | 业务层内部凭据，覆盖默认toString以免输出哈希 |
 | `src/main/java/com/sportsmall/model/AuthenticatedUser.java` | 本次核验通过的用户身份，不携带密码或哈希 |
@@ -396,7 +401,7 @@ java -jar .\target\sports-mall-0.1.0.jar login
 本次登录结果已保存到MongoDB的sports_mall.system_logs。
 ```
 
-本轮login执行完返回PowerShell，不保存跨进程登录状态；登录后业务菜单与操作权限后续在同一工程接入。
+当前新版login成功后进入下文账号菜单，本进程保留AuthenticatedUser身份，输入0退出后返回PowerShell。用户此前验证的416155f版本尚无菜单；本轮源码在其基础上继续扩展，不持久保存跨进程登录状态。
 
 ### 3. 在MongoDB读回本次登录事件
 
@@ -423,6 +428,57 @@ db.system_logs.find(
 
 2026-10-31已使用JDK21和Wrapper执行离线clean package，32项测试全部通过：原18项、登录业务12项、日志BSON映射2项。新增测试覆盖正常/错误/不存在/停用账号、基础输入、数据库读取故障、日志写入故障及Long/Date/null/嵌套字段类型。单元测试使用内存替代读写和BSON编码，不连接数据库。用户随后实际登录成功并读回MongoDB文档6ae5a75bd907b36d8083710d，用户编号1、LOGIN/INFO、LOGIN_SUCCESS与真实日期字段符合设计；失败登录等实连分支仍待后续验证。
 
+## 登录后查看和修改本人的联系方式
+
+对应课程要求：4.1用户管理中的信息修改（MySQL），本阶段先实现phone字段。
+
+| 架构位置 | 本轮作用 |
+|---|---|
+| Java进程内存 | 保存刚才通过登录校验的用户编号与身份，菜单期间复用 |
+| AccountMenu → UserAccountService | 收集业务操作，限定为本人记录，校验电话长度与账号状态 |
+| UserDao → MySQL users | SELECT显示本人资料，UPDATE修改原记录的phone，再读回保存结果 |
+| MongoDB system_logs | 再次登录时继续生成登录事件；本轮电话修改只写MySQL及终端运行日志，业务审计后续统一接入 |
+
+### 1. 进入菜单
+
+在已配置好UTF-8及数据库密码的项目根目录PowerShell执行：
+
+```powershell
+java -jar .\target\sports-mall-0.1.0.jar login
+```
+
+使用已有mall_user01和商城密码。成功后显示：
+
+```text
+当前用户：mall_user01（编号1）
+1. 查看我的账号资料
+2. 修改我的联系电话
+0. 退出登录
+请选择：
+```
+
+原理与架构目的：UserLoginService返回的身份交给AccountMenu，在本次Java进程内存中保留。进入菜单前立即清空已读入的密码字符数组；之后的操作复用已确认的用户编号，不要求用户再次指定目标账号。
+
+### 2. 输入1，查看账号资料
+
+菜单会显示编号、用户名、邮箱、电话、角色和状态。注册时电话留空的用户会看到“未填写”。
+
+原理与架构目的：业务层用当前登录编号查询MySQL users，确认该账号仍正常，再返回UserAccount显示对象；显示查询不包含password_hash。此处是实际账号查询功能，不创建新记录。
+
+### 3. 输入2，保存新的联系电话
+
+填写希望保存的联系电话，最多20个字符。演示可使用010-12345678；输入两端空白会被去除，直接回车表示清空电话为NULL。程序保存后自动显示读回的资料，相同值则提示无需修改。
+
+原理与架构目的：UserAccountService确定本人编号及状态，UserDao用PreparedStatement执行UPDATE users SET phone = ? WHERE user_id = ? AND status = 1。只更新该条记录的电话，目标编号来自登录结果；主键、角色与密码不作为这次修改的输入。业务层读回结果再交给界面显示；语句未确认更新或读回值不一致时不报告成功。profiles详细档案和其他用户字段不在本轮实现范围。
+
+### 4. 输入0，退出
+
+原理与架构目的：结束本次菜单与Java进程中的身份，关闭连接池及MongoClient。已保存的联系电话留在MySQL，之后重新登录可以读取。
+
+### 本轮验证范围
+
+2026-10-31T16:39:10+08:00离线clean package成功，23个生产Java源文件编译，42项JUnit5通过（原32项+账号服务10项），0失败0错误。新增测试检查登录编号的使用、更新与回读、空值/同值/超长电话、账号停用/删除、未登录访问、读回其他用户以及写入失败。测试采用内存替代读写，不连接数据库。用户随后于16:43:57登录，16:45:01修改演示电话并收到MySQL回读结果，再输入0正常退出；正常读写及菜单交互已确认，异常分支仍待后续集成验证。
+
 ## 实现约定与后续事项
 
 - 商品必须有分类，分类可以没有上级；因此两处关联字段的可空性不同。
@@ -430,8 +486,8 @@ db.system_logs.find(
 - 首次只读连接沿用你已验证的本机账号；进入完整写入功能时完善应用专用账号与权限。
 - 当前连接参数仅面向本机开发：关闭 TLS 并允许认证公钥获取。部署时需按部署环境另行配置。
 - 用户已完成 price 迁移，现有训练篮球单价 100.00。订单 amount 字段已创建；自动读取单价、保存下单金额及维持历史金额的行为仍待 Java 下单流程实现。
-- 现有32项JUnit5测试通过；用户已确认真实注册、登录和MongoDB登录日志回读。权限、事务、完整集成测试和正式测试报告继续补齐。
-- 截至2026-10-31，注册里程碑8b85b9c已推送Gitee；本轮继续保存已确认的登录里程碑。10-29没有提交，不回填日期。
+- 现有42项JUnit5测试通过；用户已确认真实注册、登录、MongoDB登录日志回读及本人账号查询和电话修改。完整权限、事务、集成测试和正式测试报告继续补齐。
+- 截至2026-10-31，登录里程碑416155f已推送Gitee，本轮继续保存已确认的本人资料菜单及电话修改。10-29没有提交，不回填日期。
 - 代码使用 AI 辅助编写；用户亲手配置和运行。最终按老师要求标注大模型使用，保存真实开发、测试证据。
 
 ## 连接错误的处理
