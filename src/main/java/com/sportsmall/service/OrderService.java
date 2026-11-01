@@ -17,17 +17,20 @@ public final class OrderService {
     private final ItemReader items;
     private final OrderCreator creator;
     private final OrderReader reader;
+    private final OrderCanceller canceller;
 
     public OrderService(UserAccountService accounts, OrderDao orders) {
         this(Objects.requireNonNull(accounts)::viewMyAccount, Objects.requireNonNull(orders)::findAvailableItems,
-                orders::create, orders::findByUserId);
+                orders::create, orders::findByUserId, orders::cancel);
     }
 
-    OrderService(CurrentAccountReader accounts, ItemReader items, OrderCreator creator, OrderReader reader) {
+    OrderService(CurrentAccountReader accounts, ItemReader items, OrderCreator creator,
+                 OrderReader reader, OrderCanceller canceller) {
         this.accounts = Objects.requireNonNull(accounts);
         this.items = Objects.requireNonNull(items);
         this.creator = Objects.requireNonNull(creator);
         this.reader = Objects.requireNonNull(reader);
+        this.canceller = Objects.requireNonNull(canceller);
     }
 
     public List<OrderableItem> availableFor(AuthenticatedUser currentUser) {
@@ -48,6 +51,14 @@ public final class OrderService {
         return reader.find(account.userId());
     }
 
+    public OrderView cancelMine(AuthenticatedUser currentUser, long orderId) {
+        if (orderId < 1) {
+            throw new MallBusinessException("INVALID_ORDER_ID", "请选择本人待处理订单的编号。");
+        }
+        UserAccount account = accounts.read(currentUser);
+        return canceller.cancel(account.userId(), orderId);
+    }
+
     @FunctionalInterface
     interface CurrentAccountReader {
         UserAccount read(AuthenticatedUser currentUser);
@@ -66,5 +77,10 @@ public final class OrderService {
     @FunctionalInterface
     interface OrderReader {
         List<OrderView> find(long userId);
+    }
+
+    @FunctionalInterface
+    interface OrderCanceller {
+        OrderView cancel(long userId, long orderId);
     }
 }

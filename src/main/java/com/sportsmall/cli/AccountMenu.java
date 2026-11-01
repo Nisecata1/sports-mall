@@ -26,7 +26,7 @@ public final class AccountMenu {
                            UserAccountService accounts, OrderService orders) {
         while (true) {
             console.printf("%n当前用户：%s（编号%d）%n", currentUser.username(), currentUser.userId());
-            console.printf("1. 查看我的账号资料%n2. 修改我的联系电话%n3. 创建订单%n4. 查看我的订单%n0. 退出登录%n");
+            console.printf("1. 查看我的账号资料%n2. 修改我的联系电话%n3. 创建订单%n4. 查看我的订单%n5. 取消我的待处理订单%n0. 退出登录%n");
             String option = console.readLine("请选择：");
             if (option == null || "0".equals(option.strip())) {
                 System.out.println("已退出登录，返回PowerShell。");
@@ -48,7 +48,8 @@ public final class AccountMenu {
                     }
                     case "3" -> createOrder(console, currentUser, orders);
                     case "4" -> showOrders(orders.findMine(currentUser));
-                    default -> System.out.println("请选择0、1、2、3或4。");
+                    case "5" -> cancelOrder(console, currentUser, orders);
+                    default -> System.out.println("请选择0、1、2、3、4或5。");
                 }
             } catch (MallBusinessException exception) {
                 LOG.warn("账号操作未完成，错误代码={}", exception.code());
@@ -103,6 +104,37 @@ public final class AccountMenu {
         System.out.println("订单创建成功。");
         showOrders(List.of(order));
         LOG.info("商城订单创建成功，订单编号={}，用户编号={}", order.orderId(), currentUser.userId());
+    }
+
+    private static void cancelOrder(Console console, AuthenticatedUser currentUser, OrderService orders) {
+        List<OrderView> pending = orders.findMine(currentUser).stream().filter(order -> order.status() == 0).toList();
+        if (pending.isEmpty()) {
+            System.out.println("你没有可取消的待处理订单。");
+            return;
+        }
+        showOrders(pending);
+        String input = console.readLine("要取消的订单编号（留空返回）：");
+        if (input == null || input.isBlank()) {
+            return;
+        }
+        long orderId;
+        try {
+            orderId = Long.parseLong(input.strip());
+        } catch (NumberFormatException exception) {
+            throw new MallBusinessException("INVALID_ORDER_ID", "订单编号应为列表中的整数。");
+        }
+        if (pending.stream().noneMatch(order -> order.orderId() == orderId)) {
+            throw new MallBusinessException("ORDER_NOT_CANCELLABLE", "请从上方的本人待处理订单中选择。");
+        }
+        String confirmation = console.readLine("取消订单%d？输入y确认，其他输入返回：", orderId);
+        if (confirmation == null || !"y".equalsIgnoreCase(confirmation.strip())) {
+            System.out.println("本次未取消订单。");
+            return;
+        }
+        OrderView cancelled = orders.cancelMine(currentUser, orderId);
+        System.out.println("订单已取消。");
+        showOrders(List.of(cancelled));
+        LOG.info("商城订单已取消，订单编号={}，用户编号={}", cancelled.orderId(), currentUser.userId());
     }
 
     private static void showOrders(List<OrderView> orders) {

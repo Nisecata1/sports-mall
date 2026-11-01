@@ -20,6 +20,8 @@ Gitee 仓库：[Nisegitee/sports-mall](https://gitee.com/Nisegitee/sports-mall)�
 
 2026-10-31用户于17:19:42登录，17:19:51经菜单3创建订单1：用户1、商品1训练篮球、金额100.00、待处理、数据库时间2026-10-31 17:19:51；随后菜单4从MySQL重新查询到同一订单，再正常退出。由此确认事务下单和本人订单查询的正常流程；真实回滚、价格变化和并发等分支继续补齐。55项单元测试已通过。这是正式工程的阶段版本，其他用户字段、完整权限、档案、商品维护、订单筛选/状态转换、评论和统计等继续推进；本地核对笔记docs/需求对照与进度.md不随源码仓库上传。
 
+已接入菜单5取消本人待处理订单，新增两个订单触发器与sp_cancel_order存储过程的安装脚本。62项JUnit及21项隔离MySQL集成断言通过。用户于2026-11-01实操，23:47:56成功取消订单1，菜单4重新查询也显示已取消；金额仍100.00、创建时间仍2026-10-31 17:19:51。这确认主库取消过程及JDBC调用正常；尚未提供主库两个触发器的元数据输出，不将取消成功等同于两者定义均已核验。课程存储过程至少2个，目前第1个取消过程已使用，月报过程后续补齐。
+
 ## 1. 当前正式工程目录
 
 当前工程已统一放在课程目录的“9-期末大作业_运动装备商城/sports-mall”中。终端与IDE均使用这一份工程。PowerShell可执行：
@@ -158,6 +160,8 @@ flowchart LR
 | `src/main/java/com/sportsmall/dao/mongo/SystemLogDao.java` | 将登录结果写入system_logs，Long编号、BSON日期及嵌套操作信息 |
 | `src/test/java/com/sportsmall/dao/mongo/ItemDetailDaoTest.java` | 检查真实BSON类型映射的边界，不连接或修改数据库 |
 | `src/main/resources/sql/mysql_schema.sql` | 五表目标结构，供新数据库使用；现有表不会被 IF NOT EXISTS 自动改成新结构 |
+| `src/main/resources/sql/mysql_triggers.sql` | 两个订单触发器：校验新增订单，保护后续状态及历史字段；须在商城库安装 |
+| `src/main/resources/sql/mysql_procedures.sql` | 当前含首个sp_cancel_order过程，由Java主动调用，事务由JDBC管理；月报过程待补 |
 | `src/main/resources/sql/mysql_migrate_001_item_price.sql` | 现有商品表补单价的分步迁移，检查后执行一次；不是初始化数据脚本 |
 | `src/main/resources/sql/mongodb_init.js` | mongosh阶段性脚本：四集合、首批查询索引及一条商品详情；完整测试数据、聚合和业务写入仍待补齐 |
 | `docs/需求规格说明书.pdf` | 老师要求的需求规格交付物，V0.1需求基线 |
@@ -527,15 +531,64 @@ java -jar .\target\sports-mall-0.1.0.jar login
 
 官方实现依据：[JDBC Connection事务方法](https://docs.oracle.com/en/java/javase/21/docs/api/java.sql/java/sql/Connection.html)、[MySQL InnoDB锁定读取](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html)。
 
+## 用存储过程和触发器取消本人订单
+
+对应课程要求：存储过程至少2个、触发器至少2个及JDBC事务调用。本轮安装2个触发器及第1个过程；具体取消操作和状态值为本工程实现约定，月报过程尚待补齐。
+
+| 架构位置 | 本次职责 |
+|---|---|
+| AccountMenu → OrderService | 用户选择自己的待处理订单并确认，复用当前登录编号 |
+| OrderDao / JDBC事务 | 检查当前账号，使用CallableStatement调用过程，回读后提交 |
+| MySQL sp_cancel_order | 用用户编号、订单编号、status=0限定UPDATE，改为2；不内部提交 |
+| MySQL BEFORE UPDATE触发器 | 自动检查状态流转及历史字段；不允许修改金额/归属或把终态退回待处理 |
+
+### 1. 从项目根目录PowerShell打开MySQL客户端
+
+```powershell
+& "C:\develop\MySQL\mysql-8.4.13-winx64\bin\mysql.exe" --no-defaults --host=127.0.0.1 --port=18306 --user=root --password --default-character-set=utf8mb4 --database=sports_mall
+```
+
+这里输入MySQL连接密码。原理与架构目的：从应用进程进入数据库管理客户端，准备把SQL文件中的对象定义安装到服务器。客户端继承工程根目录，下一步才能直接读取相对路径。
+
+### 2. 在mysql提示符安装SQL对象，然后退出客户端
+
+```sql
+SOURCE src/main/resources/sql/mysql_triggers.sql;
+SOURCE src/main/resources/sql/mysql_procedures.sql;
+exit
+```
+
+原理与架构目的：SOURCE由mysql客户端读取文件并执行定义语句，脚本末尾分别列出2个触发器、1个存储过程。文件本身是源码，安装后对象保存在sports_mall数据库中；安装只创建定义，不执行取消，也不重建五表。IF NOT EXISTS保留同名对象，重放不会升级已有定义。
+
+trg_orders_validate_insert要求新订单为待处理、账号正常、商品在售且金额等于当前单价；trg_orders_validate_update保护订单编号、归属、商品、金额和创建时间，只允许保留原状态或从0变为1/2。这些是数据库内自动执行的规则，不需要Java逐个调用触发器。
+
+### 3. 返回PowerShell登录，菜单5取消订单1
+
+```powershell
+java -jar .\target\sports-mall-0.1.0.jar login
+```
+
+使用mall_user01及商城密码，菜单选择5，再从列表选择订单编号1，输入y确认。原理与架构目的：Java取得本次用户编号，开启JDBC事务并调用sp_cancel_order(用户编号,订单编号)；过程发起UPDATE，BEFORE UPDATE触发器先检查规则，允许后修改状态，再由Java回读并commit。CallableStatement继承PreparedStatement，参数仍绑定，不拼接用户输入。过程内部没有START TRANSACTION/COMMIT，可参加调用者的整体回滚。
+
+用户已于2026-11-01实际执行菜单5，23:47:56收到“订单已取消”，订单1由待处理0变为已取消2，金额仍100.00，用户/商品编号及创建时间保持原值。随后菜单4重新查询相同结果，查看本人资料后正常退出。订单1现在已取消，保留其真实状态。
+
+### 本轮验证范围
+
+2026-10-31T17:32:23+08:00离线clean package成功，62项JUnit全部通过（原55+取消业务7），0失败0错误。另使用已安装MySQL程序在工程外新建隔离测试实例，先核对实际datadir，再安装五表、两个触发器及首个过程，调用本工程JAR中的OrderDao/JdbcTransactions，通过21项SQL/JDBC集成断言：新建/取消、重复与他人取消拒绝、历史字段与终态保护、插入规则、真实插入回滚、过程参与调用者回滚、改价后旧金额及新报价等。定义重放保留测试订单，随后停止实例并清理其目录。测试辅助源码和结果在工程外，不随提交源码上传；没有连接或修改用户的18306商城实例。业务主库的对象安装及菜单5操作待用户执行，锁竞争及真实断连仍待补。
+
+官方依据：[MySQL触发器](https://dev.mysql.com/doc/refman/8.4/en/trigger-syntax.html)、[JDBC调用存储过程](https://dev.mysql.com/doc/connector-j/en/connector-j-usagenotes-statements-callable.html)。
+
+2026-11-01补充主库证据：用户已完成上述取消和重新查询正常流程，sp_cancel_order调用成功。前述“待手操”为10-31构建时的状态；主库两个触发器定义的元数据尚未提供，锁竞争及真实断连仍待补。
+
 ## 实现约定与后续事项
 
 - 商品必须有分类，分类可以没有上级；因此两处关联字段的可空性不同。
 - 编号采用自增，状态暂约定 1 为在售；这些是本工程的实现选择。
 - 首次只读连接沿用你已验证的本机账号；进入完整写入功能时完善应用专用账号与权限。
 - 当前连接参数仅面向本机开发：关闭 TLS 并允许认证公钥获取。部署时需按部署环境另行配置。
-- price迁移已完成，训练篮球单价100.00。用户已实际下单并读回订单1金额100.00；后续改价后的历史金额、回滚及并发分支仍需验证。本机不需要重复执行建表或单价迁移。
-- 现有55项JUnit5测试通过；用户已确认注册/登录、登录日志、本人资料查询/电话修改及事务下单/订单查询的正常流程。完整权限、事务并发与故障集成验收、正式测试报告继续补齐。
-- 截至2026-10-31，本人资料菜单里程碑b0e6376已推送Gitee，本轮继续保存已确认的下单及本人订单查询。10-29没有提交，不回填日期。
+- price迁移已完成，用户实际下单、取消并读回订单1，金额均为100.00。改价历史金额、插入回滚及过程回滚已在隔离MySQL验证；并发/断连继续补齐。本机不重复执行建表或单价迁移。
+- 现有62项JUnit5测试通过，另通过21项隔离SQL/JDBC集成断言；这些与用户主库的实际运行证据分别记录。完整权限、并发、其他业务与正式测试报告继续补齐。
+- 下单及本人订单查询936be50已推送Gitee；取消、两个触发器及首个存储过程随本次版本保存，后续按真实开发日期持续提交。10-29没有提交，不回填日期。
 - 代码使用 AI 辅助编写；用户亲手配置和运行。最终按老师要求标注大模型使用，保存真实开发、测试证据。
 
 ## 连接错误的处理
@@ -552,6 +605,9 @@ java -jar .\target\sports-mall-0.1.0.jar login
 - `LOGIN_LOG_SAVE_FAILED`：MongoDB登录日志未确认保存，检查服务窗口、连接配置与system_logs写权限。
 - `ITEM_PRICE_CHANGED`：展示后价格已变化，重新选择商品并确认新报价。
 - `ORDER_SAVE_UNCONFIRMED`：下单结果未确认，先查看我的订单，再决定是否重试创建，并检查MySQL连接。
+- `ORDER_ROUTINE_NOT_FOUND`：先在商城库安装mysql_procedures.sql中的sp_cancel_order。
+- `ORDER_NOT_CANCELLABLE`：订单不属于本人、不存在或已不是待处理；重新查看订单。
+- `ORDER_CANCEL_UNCONFIRMED`：取消结果未确认，先查看订单状态并检查MySQL连接。
 
 ## 两库组合检查记录（2026-10-30）
 

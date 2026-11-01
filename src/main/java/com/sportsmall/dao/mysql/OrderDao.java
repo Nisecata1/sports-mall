@@ -8,6 +8,7 @@ import com.sportsmall.util.JdbcTransactions;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
+import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -85,21 +86,39 @@ public final class OrderDao {
                         }
                     }
                 }
-                try (PreparedStatement statement = connection.prepareStatement(FIND_CREATED)) {
-                    statement.setLong(1, orderId);
-                    statement.setLong(2, userId);
-                    try (ResultSet rows = statement.executeQuery()) {
-                        if (!rows.next()) {
-                            throw new SQLException("Created order could not be read back");
-                        }
-                        return mapOrder(rows);
-                    }
-                }
+                return readOne(connection, orderId, userId);
             });
         } catch (SQLException exception) {
+            if ("45000".equals(exception.getSQLState())) {
+                throw new MallBusinessException("ORDER_RULE_REJECTED", "数据库规则拒绝了本次下单，请核对商品、账号和金额。");
+            }
             // 提交/连接异常时，不能断言服务器必然没有完成提交；先让用户查订单。
             throw new MallDataAccessException("ORDER_SAVE_UNCONFIRMED",
                     "下单结果未确认，请先查看我的订单，再决定是否重新下单，并检查MySQL连接。");
+        }
+    }
+
+    public OrderView cancel(long userId, long orderId) {
+        try {
+            return JdbcTransactions.execute(dataSource, connection -> {
+                requireActiveUser(connection, userId);
+                try (CallableStatement statement = connection.prepareCall("{call sp_cancel_order(?, ?)}")) {
+                    statement.setLong(1, userId);
+                    statement.setLong(2, orderId);
+                    statement.executeUpdate();
+                }
+                return readOne(connection, orderId, userId);
+            });
+        } catch (SQLException exception) {
+            if (exception.getErrorCode() == 1305) {
+                throw new MallDataAccessException("ORDER_ROUTINE_NOT_FOUND",
+                        "尚未找到sp_cancel_order，请先在sports_mall安装mysql_procedures.sql中的存储过程。");
+            }
+            if ("45000".equals(exception.getSQLState())) {
+                throw new MallBusinessException("ORDER_NOT_CANCELLABLE", "该订单不存在、不属于当前用户或已不处于待处理状态。");
+            }
+            throw new MallDataAccessException("ORDER_CANCEL_UNCONFIRMED",
+                    "取消结果未确认，请先查看我的订单并检查MySQL连接。");
         }
     }
 
@@ -116,6 +135,19 @@ public final class OrderDao {
             }
         } catch (SQLException exception) {
             throw new MallDataAccessException("ORDER_QUERY_FAILED", "无法读取我的订单，请检查MySQL连接与订单相关表。");
+        }
+    }
+
+    private static OrderView readOne(Connection connection, long orderId, long userId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(FIND_CREATED)) {
+            statement.setLong(1, orderId);
+            statement.setLong(2, userId);
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) {
+                    throw new SQLException("Order could not be read back for its owner");
+                }
+                return mapOrder(rows);
+            }
         }
     }
 
