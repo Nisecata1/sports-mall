@@ -2,6 +2,7 @@ package com.sportsmall.dao.mysql;
 
 import com.sportsmall.exception.MallBusinessException;
 import com.sportsmall.exception.MallDataAccessException;
+import com.sportsmall.model.OrderFilter;
 import com.sportsmall.model.OrderableItem;
 import com.sportsmall.model.OrderView;
 import com.sportsmall.util.JdbcTransactions;
@@ -14,6 +15,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -43,6 +46,9 @@ public final class OrderDao {
                    o.amount, o.status, o.created_at
             FROM orders o JOIN items i ON o.item_id = i.item_id
             WHERE o.user_id = ?
+              AND (? IS NULL OR o.status = ?)
+              AND (? IS NULL OR o.created_at >= ?)
+              AND (? IS NULL OR o.created_at < ?)
             ORDER BY o.created_at DESC, o.order_id DESC
             """;
 
@@ -123,9 +129,27 @@ public final class OrderDao {
     }
 
     public List<OrderView> findByUserId(long userId) {
+        return findByUserId(userId, OrderFilter.all());
+    }
+
+    public List<OrderView> findByUserId(long userId, OrderFilter filter) {
+        Objects.requireNonNull(filter);
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statement = connection.prepareStatement(FIND_MINE)) {
             statement.setLong(1, userId);
+            for (int index = 2; index <= 3; index++) {
+                if (filter.status() == null) {
+                    statement.setNull(index, Types.TINYINT);
+                } else {
+                    statement.setInt(index, filter.status());
+                }
+            }
+            Timestamp start = filter.startInclusive() == null ? null : Timestamp.valueOf(filter.startInclusive());
+            Timestamp end = filter.endExclusive() == null ? null : Timestamp.valueOf(filter.endExclusive());
+            statement.setTimestamp(4, start);
+            statement.setTimestamp(5, start);
+            statement.setTimestamp(6, end);
+            statement.setTimestamp(7, end);
             try (ResultSet rows = statement.executeQuery()) {
                 List<OrderView> orders = new ArrayList<>();
                 while (rows.next()) {

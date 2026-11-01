@@ -22,6 +22,8 @@ Gitee 仓库：[Nisegitee/sports-mall](https://gitee.com/Nisegitee/sports-mall)�
 
 已接入菜单5取消本人待处理订单，新增两个订单触发器与sp_cancel_order存储过程的安装脚本。62项JUnit及21项隔离MySQL集成断言通过。用户于2026-11-01实操，23:47:56成功取消订单1，菜单4重新查询也显示已取消；金额仍100.00、创建时间仍2026-10-31 17:19:51。这确认主库取消过程及JDBC调用正常；尚未提供主库两个触发器的元数据输出，不将取消成功等同于两者定义均已核验。课程存储过程至少2个，目前第1个取消过程已使用，月报过程后续补齐。
 
+本轮另补要求书4.1的订单查询筛选：菜单4支持当前状态和订单创建日期的组合条件，各项可留空。73项JUnit与28项隔离SQL/JDBC断言通过，包括首尾午夜、状态组合、本人归属及空结果；新版JAR已构建，用户主库交互结果待实际运行。已有订单1保持已取消，不新增示例订单。
+
 ## 1. 当前正式工程目录
 
 当前工程已统一放在课程目录的“9-期末大作业_运动装备商城/sports-mall”中。终端与IDE均使用这一份工程。PowerShell可执行：
@@ -146,7 +148,7 @@ flowchart LR
 | `src/main/java/com/sportsmall/dao/mysql/UserDao.java` | 用PreparedStatement保存普通账号、按用户名读取登录凭据，处理唯一键冲突 |
 | `src/main/java/com/sportsmall/util/PasswordHasher.java` | JDK的PBKDF2加盐密码哈希与校验，供注册及后续登录复用 |
 | `src/main/java/com/sportsmall/cli/LoginCommand.java` | 本机登录入口，隐藏密码，管理两库连接及显示登录结果 |
-| `src/main/java/com/sportsmall/cli/AccountMenu.java` | 登录后菜单，查看本人账号、修改电话及退出 |
+| `src/main/java/com/sportsmall/cli/AccountMenu.java` | 登录后菜单，查看资料、修改电话、下单、筛选本人订单及取消待处理订单 |
 | `src/main/java/com/sportsmall/service/UserAccountService.java` | 用已登录身份限定本人记录，校验电话、检查账号状态并协调保存与回读 |
 | `src/main/java/com/sportsmall/model/UserAccount.java` | 用户可显示资料，不查询或携带密码哈希 |
 | `src/main/java/com/sportsmall/service/OrderService.java` | 用登录身份协调商品选择、创建订单及本人订单查询 |
@@ -154,6 +156,7 @@ flowchart LR
 | `src/main/java/com/sportsmall/util/JdbcTransactions.java` | 显式setAutoCommit(false)、成功commit、异常时尝试rollback并关闭连接 |
 | `src/main/java/com/sportsmall/model/OrderableItem.java` | 下单前展示的商品报价 |
 | `src/main/java/com/sportsmall/model/OrderView.java` | 订单显示对象，金额来自orders.amount历史记录 |
+| `src/main/java/com/sportsmall/model/OrderFilter.java` | Java中的订单状态和创建日期条件，结束日期转为次日零点之前；不是新数据库表 |
 | `src/main/java/com/sportsmall/service/UserLoginService.java` | 协调账号核验、状态检查与登录日志，不把连接故障当成密码错误 |
 | `src/main/java/com/sportsmall/model/LoginAccount.java` | 业务层内部凭据，覆盖默认toString以免输出哈希 |
 | `src/main/java/com/sportsmall/model/AuthenticatedUser.java` | 本次核验通过的用户身份，不携带密码或哈希 |
@@ -580,6 +583,49 @@ java -jar .\target\sports-mall-0.1.0.jar login
 
 2026-11-01补充主库证据：用户已完成上述取消和重新查询正常流程，sp_cancel_order调用成功。前述“待手操”为10-31构建时的状态；主库两个触发器定义的元数据尚未提供，锁竞争及真实断连仍待补。
 
+## 按状态与创建日期筛选本人订单
+
+对应要求书4.1“订单查询：按状态/时间筛选”。使用现有users、orders、items，不新增或迁移数据库表。
+
+```mermaid
+flowchart LR
+    A["菜单4：输入条件"] --> B["OrderService：确定登录用户"]
+    B --> C["OrderDao：绑定参数"]
+    C --> D["MySQL：筛选本人订单"]
+    D --> E["菜单显示匹配记录"]
+```
+
+### 1. 在项目根目录PowerShell启动新版JAR并登录
+
+```powershell
+java -jar .\target\sports-mall-0.1.0.jar login
+```
+
+新JAR已在本机构建。沿用当前UTF-8终端及MALL_DB_PASSWORD，使用mall_user01与商城密码。原理与架构目的：进入已有Java应用，获得本次登录身份；订单所属用户由该身份确定，筛选输入不包含用户编号。登录仍写入MongoDB登录日志。
+
+### 2. 选择菜单4，查找10月31日创建的已取消订单
+
+| 提示 | 输入 |
+|---|---|
+| 请选择 | 4 |
+| 订单状态 | 2 |
+| 开始创建日期 | 2026-10-31 |
+| 结束创建日期 | 2026-10-31 |
+
+原理与架构目的：入口将输入组织为OrderFilter，业务层核对当前账号，DAO用固定SQL及PreparedStatement参数把条件交给MySQL。状态、日期与本人编号同时满足才返回，金额仍读取orders.amount。OrderFilter仅是Java里的条件对象，不是第六张表；查询不改变已有订单。
+
+按目前已确认的一笔订单，预期返回订单1、训练篮球、100.00、已取消、创建时间2026-10-31 17:19:51。日期筛选用订单创建时间，取消发生日期不改变created_at。
+
+### 3. 理解结束日及空结果
+
+界面输入结束日期2026-10-31，程序将上界转换为“小于2026-11-01 00:00:00”，覆盖10月31日整日；开始日期则是“大于等于2026-10-31 00:00:00”。SQL比较created_at本身，不把用户输入拼接为SQL。
+
+再次选择菜单4，把状态改为0、日期仍为2026-10-31至2026-10-31。按目前这笔已取消订单，应提示“没有符合这些条件的订单”。这是正常查询结果，不会重新激活或删除订单；订单仍存在，只是不满足这组条件。各项直接回车表示该条件不限，可组合只按状态、只按日期或全部本人订单。输入0退出登录。
+
+### 本轮验证范围
+
+离线clean package成功，29个生产Java源文件及9个测试源文件编译，73项JUnit5通过（原62+筛选条件7+查询业务4），0失败0错误。隔离MySQL实测扩充到28项断言（原21+筛选7），核对闰日零点与23:59:59、次日零点排除、状态/日期组合、用户归属、单边日期、空结果及全部条件留空；测试实例已停止并清理，仅使用工程外合成数据。未连接用户18306主库；用户菜单4的新版筛选交互尚待确认。查询性能及多条件商品分页继续后续测量，不以正确性断言代替性能结论。
+
 ## 实现约定与后续事项
 
 - 商品必须有分类，分类可以没有上级；因此两处关联字段的可空性不同。
@@ -587,7 +633,7 @@ java -jar .\target\sports-mall-0.1.0.jar login
 - 首次只读连接沿用你已验证的本机账号；进入完整写入功能时完善应用专用账号与权限。
 - 当前连接参数仅面向本机开发：关闭 TLS 并允许认证公钥获取。部署时需按部署环境另行配置。
 - price迁移已完成，用户实际下单、取消并读回订单1，金额均为100.00。改价历史金额、插入回滚及过程回滚已在隔离MySQL验证；并发/断连继续补齐。本机不重复执行建表或单价迁移。
-- 现有62项JUnit5测试通过，另通过21项隔离SQL/JDBC集成断言；这些与用户主库的实际运行证据分别记录。完整权限、并发、其他业务与正式测试报告继续补齐。
+- 现有73项JUnit5测试通过，另通过28项隔离SQL/JDBC集成断言；这些与用户主库的实际运行证据分别记录。完整权限、并发、其他业务与正式测试报告继续补齐。
 - 下单及本人订单查询936be50已推送Gitee；取消、两个触发器及首个存储过程随本次版本保存，后续按真实开发日期持续提交。10-29没有提交，不回填日期。
 - 代码使用 AI 辅助编写；用户亲手配置和运行。最终按老师要求标注大模型使用，保存真实开发、测试证据。
 
@@ -608,6 +654,7 @@ java -jar .\target\sports-mall-0.1.0.jar login
 - `ORDER_ROUTINE_NOT_FOUND`：先在商城库安装mysql_procedures.sql中的sp_cancel_order。
 - `ORDER_NOT_CANCELLABLE`：订单不属于本人、不存在或已不是待处理；重新查看订单。
 - `ORDER_CANCEL_UNCONFIRMED`：取消结果未确认，先查看订单状态并检查MySQL连接。
+- `INVALID_ORDER_FILTER`：检查订单状态、有效日期及开始日期不晚于结束日期，再重新查询。
 
 ## 两库组合检查记录（2026-10-30）
 

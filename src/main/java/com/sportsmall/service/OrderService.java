@@ -3,6 +3,7 @@ package com.sportsmall.service;
 import com.sportsmall.dao.mysql.OrderDao;
 import com.sportsmall.exception.MallBusinessException;
 import com.sportsmall.model.AuthenticatedUser;
+import com.sportsmall.model.OrderFilter;
 import com.sportsmall.model.OrderableItem;
 import com.sportsmall.model.OrderView;
 import com.sportsmall.model.UserAccount;
@@ -47,8 +48,13 @@ public final class OrderService {
     }
 
     public List<OrderView> findMine(AuthenticatedUser currentUser) {
+        return findMine(currentUser, OrderFilter.all());
+    }
+
+    public List<OrderView> findMine(AuthenticatedUser currentUser, OrderFilter filter) {
+        Objects.requireNonNull(filter);
         UserAccount account = accounts.read(currentUser);
-        return reader.find(account.userId());
+        return reader.find(account.userId(), filter);
     }
 
     public OrderView cancelMine(AuthenticatedUser currentUser, long orderId) {
@@ -76,7 +82,7 @@ public final class OrderService {
 
     @FunctionalInterface
     interface OrderReader {
-        List<OrderView> find(long userId);
+        List<OrderView> find(long userId, OrderFilter filter);
     }
 
     @FunctionalInterface

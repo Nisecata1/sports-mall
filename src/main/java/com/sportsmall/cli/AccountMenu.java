@@ -3,6 +3,7 @@ package com.sportsmall.cli;
 import com.sportsmall.exception.MallBusinessException;
 import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.AuthenticatedUser;
+import com.sportsmall.model.OrderFilter;
 import com.sportsmall.model.UserAccount;
 import com.sportsmall.model.OrderableItem;
 import com.sportsmall.model.OrderView;
@@ -12,7 +13,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Console;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 /** 登录后的本机交互菜单；当前身份一直由已通过登录的结果传入。 */
@@ -47,7 +50,7 @@ public final class AccountMenu {
                         LOG.info("账号联系方式处理完成，用户编号={}，实际修改={}", currentUser.userId(), result.changed());
                     }
                     case "3" -> createOrder(console, currentUser, orders);
-                    case "4" -> showOrders(orders.findMine(currentUser));
+                    case "4" -> queryOrders(console, currentUser, orders);
                     case "5" -> cancelOrder(console, currentUser, orders);
                     default -> System.out.println("请选择0、1、2、3、4或5。");
                 }
@@ -106,8 +109,48 @@ public final class AccountMenu {
         LOG.info("商城订单创建成功，订单编号={}，用户编号={}", order.orderId(), currentUser.userId());
     }
 
+    private static void queryOrders(Console console, AuthenticatedUser currentUser, OrderService orders) {
+        console.printf("按订单当前状态、创建日期筛选；各项留空表示不限。%n");
+        String statusInput = console.readLine("订单状态（0待处理 / 1已完成 / 2已取消）：");
+        if (statusInput == null) { return; }
+        String startInput = console.readLine("开始创建日期（YYYY-MM-DD，留空不限）：");
+        if (startInput == null) { return; }
+        String endInput = console.readLine("结束创建日期（YYYY-MM-DD，包含当天，留空不限）：");
+        if (endInput == null) { return; }
+
+        Integer status = null;
+        if (!statusInput.isBlank()) {
+            try {
+                status = Integer.valueOf(statusInput.strip());
+            } catch (NumberFormatException exception) {
+                throw new MallBusinessException("INVALID_ORDER_FILTER", "订单状态请选择0、1、2，留空表示全部。");
+            }
+        }
+        OrderFilter filter = new OrderFilter(status, parseDate(startInput), parseDate(endInput));
+        console.printf("查询条件：状态=%s，创建日期=%s至%s（包含首尾日期）。%n",
+                status == null ? "全部" : statusName(status),
+                filter.startDate() == null ? "不限" : filter.startDate(),
+                filter.endDate() == null ? "不限" : filter.endDate());
+        List<OrderView> matches = orders.findMine(currentUser, filter);
+        if (matches.isEmpty()) {
+            System.out.println("没有符合这些条件的订单。");
+        } else {
+            showOrders(matches);
+            System.out.printf("共%d条符合条件的本人订单。%n", matches.size());
+        }
+    }
+
+    private static LocalDate parseDate(String input) {
+        if (input.isBlank()) { return null; }
+        try {
+            return LocalDate.parse(input.strip(), DateTimeFormatter.ISO_LOCAL_DATE);
+        } catch (DateTimeParseException exception) {
+            throw new MallBusinessException("INVALID_ORDER_FILTER", "创建日期请使用YYYY-MM-DD格式，并填写有效日期。");
+        }
+    }
+
     private static void cancelOrder(Console console, AuthenticatedUser currentUser, OrderService orders) {
-        List<OrderView> pending = orders.findMine(currentUser).stream().filter(order -> order.status() == 0).toList();
+        List<OrderView> pending = orders.findMine(currentUser, new OrderFilter(0, null, null));
         if (pending.isEmpty()) {
             System.out.println("你没有可取消的待处理订单。");
             return;
@@ -144,15 +187,19 @@ public final class AccountMenu {
         }
         System.out.println("订单编号 | 用户编号 | 商品编号 | 商品名称 | 金额（元） | 状态 | 创建时间");
         for (OrderView order : orders) {
-            String status = switch (order.status()) {
-                case 0 -> "待处理";
-                case 1 -> "已完成";
-                case 2 -> "已取消";
-                default -> "未知状态";
-            };
+            String status = statusName(order.status());
             System.out.printf("%d | %d | %d | %s | %s | %s | %s%n", order.orderId(), order.userId(),
                     order.itemId(), order.itemTitle(), order.amount().setScale(2).toPlainString(), status,
                     order.createdAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
         }
+    }
+
+    private static String statusName(int status) {
+        return switch (status) {
+            case 0 -> "待处理";
+            case 1 -> "已完成";
+            case 2 -> "已取消";
+            default -> "未知状态";
+        };
     }
 }

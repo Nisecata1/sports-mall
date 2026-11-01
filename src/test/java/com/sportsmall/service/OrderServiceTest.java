@@ -3,6 +3,7 @@ package com.sportsmall.service;
 import com.sportsmall.exception.MallBusinessException;
 import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.AuthenticatedUser;
+import com.sportsmall.model.OrderFilter;
 import com.sportsmall.model.OrderView;
 import com.sportsmall.model.UserAccount;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Stream;
@@ -33,7 +35,7 @@ class OrderServiceTest {
             assertEquals(7L, itemId);
             assertEquals(0, quote.compareTo(new BigDecimal("100.00")));
             return created;
-        }, userId -> List.of(), OrderServiceTest::unexpectedCancellation);
+        }, (userId, filter) -> List.of(), OrderServiceTest::unexpectedCancellation);
         assertSame(created, service.createFor(CURRENT, 7L, new BigDecimal("100.00")));
     }
 
@@ -41,7 +43,7 @@ class OrderServiceTest {
     void myOrderQueryUsesOwnerIdAndKeepsStoredHistoricalAmount() {
         OrderView historical = order("88.00");
         OrderService service = new OrderService(currentUser -> ACCOUNT, List::of,
-                (userId, itemId, quote) -> { fail("查看订单不应新建订单"); return null; }, userId -> {
+                (userId, itemId, quote) -> { fail("查看订单不应新建订单"); return null; }, (userId, filter) -> {
                     assertEquals(42L, userId);
                     return List.of(historical);
                 }, OrderServiceTest::unexpectedCancellation);
@@ -54,7 +56,7 @@ class OrderServiceTest {
         OrderService service = new OrderService(currentUser -> {
             fail("无效选择不应进入数据库");
             return ACCOUNT;
-        }, List::of, (owner, item, quote) -> { fail("无效选择不应保存"); return null; }, owner -> List.of(),
+        }, List::of, (owner, item, quote) -> { fail("无效选择不应保存"); return null; }, (owner, filter) -> List.of(),
                 OrderServiceTest::unexpectedCancellation);
         MallBusinessException failure = assertThrows(MallBusinessException.class,
                 () -> service.createFor(CURRENT, itemId, price));
@@ -74,7 +76,7 @@ class OrderServiceTest {
     void disabledAccountCannotReachOrderCreation() {
         OrderService service = new OrderService(currentUser -> {
             throw new MallBusinessException("ACCOUNT_DISABLED", "synthetic disabled account");
-        }, List::of, (owner, item, quote) -> { fail("停用账号不能下单"); return null; }, owner -> List.of(),
+        }, List::of, (owner, item, quote) -> { fail("停用账号不能下单"); return null; }, (owner, filter) -> List.of(),
                 OrderServiceTest::unexpectedCancellation);
         MallBusinessException failure = assertThrows(MallBusinessException.class,
                 () -> service.createFor(CURRENT, 7L, new BigDecimal("100.00")));
@@ -85,7 +87,7 @@ class OrderServiceTest {
     void unconfirmedDatabaseResultIsNotTurnedIntoSuccess() {
         OrderService service = new OrderService(currentUser -> ACCOUNT, List::of, (owner, item, quote) -> {
             throw new MallDataAccessException("ORDER_SAVE_UNCONFIRMED", "synthetic unavailable database");
-        }, owner -> List.of(), OrderServiceTest::unexpectedCancellation);
+        }, (owner, filter) -> List.of(), OrderServiceTest::unexpectedCancellation);
         MallDataAccessException failure = assertThrows(MallDataAccessException.class,
                 () -> service.createFor(CURRENT, 7L, new BigDecimal("100.00")));
         assertEquals("ORDER_SAVE_UNCONFIRMED", failure.code());
@@ -99,7 +101,7 @@ class OrderServiceTest {
         OrderService service = new OrderService(current -> {
             assertSame(CURRENT, current);
             return ACCOUNT;
-        }, List::of, (owner, item, price) -> fail("取消不应创建新订单"), owner -> List.of(), (owner, orderId) -> {
+        }, List::of, (owner, item, price) -> fail("取消不应创建新订单"), (owner, filter) -> List.of(), (owner, orderId) -> {
             assertEquals(42L, owner);
             assertEquals(81L, orderId);
             return cancelled;
@@ -113,7 +115,7 @@ class OrderServiceTest {
     @ValueSource(longs = {0L, -1L})
     void invalidCancellationIdNeverReachesDatabase(long orderId) {
         OrderService service = new OrderService(current -> fail("无效编号不能进入数据库"), List::of,
-                (owner, item, price) -> fail("不能创建新订单"), owner -> List.of(), OrderServiceTest::unexpectedCancellation);
+                (owner, item, price) -> fail("不能创建新订单"), (owner, filter) -> List.of(), OrderServiceTest::unexpectedCancellation);
         MallBusinessException failure = assertThrows(MallBusinessException.class,
                 () -> service.cancelMine(CURRENT, orderId));
         assertEquals("INVALID_ORDER_ID", failure.code());
@@ -123,7 +125,7 @@ class OrderServiceTest {
     void disabledAccountCannotCancelOrders() {
         OrderService service = new OrderService(current -> {
             throw new MallBusinessException("ACCOUNT_DISABLED", "synthetic disabled account");
-        }, List::of, (owner, item, price) -> fail("不能创建新订单"), owner -> List.of(),
+        }, List::of, (owner, item, price) -> fail("不能创建新订单"), (owner, filter) -> List.of(),
                 OrderServiceTest::unexpectedCancellation);
         MallBusinessException failure = assertThrows(MallBusinessException.class,
                 () -> service.cancelMine(CURRENT, 81L));
@@ -133,7 +135,7 @@ class OrderServiceTest {
     @Test
     void databaseCancellationRejectionDoesNotBecomeSuccess() {
         OrderService service = new OrderService(current -> ACCOUNT, List::of,
-                (owner, item, price) -> fail("不能创建新订单"), owner -> List.of(), (owner, orderId) -> {
+                (owner, item, price) -> fail("不能创建新订单"), (owner, filter) -> List.of(), (owner, orderId) -> {
                     throw new MallBusinessException("ORDER_NOT_CANCELLABLE", "synthetic invalid state or owner");
                 });
         MallBusinessException failure = assertThrows(MallBusinessException.class,
@@ -145,12 +147,56 @@ class OrderServiceTest {
     @ValueSource(strings = {"ORDER_ROUTINE_NOT_FOUND", "ORDER_CANCEL_UNCONFIRMED"})
     void missingRoutineOrUnconfirmedCancellationRemainsADataError(String code) {
         OrderService service = new OrderService(current -> ACCOUNT, List::of,
-                (owner, item, price) -> fail("不能创建新订单"), owner -> List.of(), (owner, orderId) -> {
+                (owner, item, price) -> fail("不能创建新订单"), (owner, filter) -> List.of(), (owner, orderId) -> {
                     throw new MallDataAccessException(code, "synthetic unavailable procedure or database");
                 });
         MallDataAccessException failure = assertThrows(MallDataAccessException.class,
                 () -> service.cancelMine(CURRENT, 81L));
         assertEquals(code, failure.code());
+    }
+
+    @Test
+    void filteredQueryUsesAuthenticatedOwnerAndKeepsCombinedCriteria() {
+        OrderFilter requested = new OrderFilter(2, LocalDate.of(2026, 10, 31), LocalDate.of(2026, 10, 31));
+        OrderService service = new OrderService(current -> {
+            assertSame(CURRENT, current);
+            return ACCOUNT;
+        }, List::of, (owner, item, price) -> fail("查询不能创建订单"), (owner, filter) -> {
+            assertEquals(42L, owner);
+            assertSame(requested, filter);
+            return List.of(order("88.00"));
+        }, OrderServiceTest::unexpectedCancellation);
+        assertEquals(new BigDecimal("88.00"), service.findMine(CURRENT, requested).get(0).amount());
+    }
+
+    @Test
+    void disabledAccountCannotReachFilteredOrderQuery() {
+        OrderService service = new OrderService(current -> {
+            throw new MallBusinessException("ACCOUNT_DISABLED", "synthetic disabled account");
+        }, List::of, (owner, item, price) -> fail("查询不能创建订单"),
+                (owner, filter) -> fail("停用账号不能读取订单"), OrderServiceTest::unexpectedCancellation);
+        MallBusinessException failure = assertThrows(MallBusinessException.class,
+                () -> service.findMine(CURRENT, new OrderFilter(2, null, null)));
+        assertEquals("ACCOUNT_DISABLED", failure.code());
+    }
+
+    @Test
+    void noMatchingOrdersIsAnEmptyReadWithoutWriting() {
+        OrderService service = new OrderService(current -> ACCOUNT, List::of,
+                (owner, item, price) -> fail("查询不能创建订单"), (owner, filter) -> List.of(),
+                OrderServiceTest::unexpectedCancellation);
+        assertTrue(service.findMine(CURRENT, new OrderFilter(1, null, null)).isEmpty());
+    }
+
+    @Test
+    void queryFailureIsNotReportedAsAnEmptyResult() {
+        OrderService service = new OrderService(current -> ACCOUNT, List::of,
+                (owner, item, price) -> fail("查询不能创建订单"), (owner, filter) -> {
+                    throw new MallDataAccessException("ORDER_QUERY_FAILED", "synthetic database failure");
+                }, OrderServiceTest::unexpectedCancellation);
+        MallDataAccessException failure = assertThrows(MallDataAccessException.class,
+                () -> service.findMine(CURRENT, OrderFilter.all()));
+        assertEquals("ORDER_QUERY_FAILED", failure.code());
     }
 
     private static OrderView unexpectedCancellation(long owner, long orderId) {
