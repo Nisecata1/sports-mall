@@ -3,8 +3,10 @@ package com.sportsmall.cli;
 import com.sportsmall.exception.MallBusinessException;
 import com.sportsmall.model.AuthenticatedUser;
 import com.sportsmall.model.CommentView;
+import com.sportsmall.model.CommentStatistics;
 import com.sportsmall.model.ItemView;
 import com.sportsmall.service.CommentService;
+import com.sportsmall.service.StatisticsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,6 +14,7 @@ import java.io.Console;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 
 /** 评论交互入口；本人编号由登录身份提供，商品从MySQL列表选择。 */
 public final class CommentMenu {
@@ -63,6 +66,25 @@ public final class CommentMenu {
             showComment(comment);
         }
         System.out.printf("本次显示%d条评论。%n", latest.size());
+    }
+
+    public static void showStatistics(Console console, AuthenticatedUser user, CommentService comments,
+                                      StatisticsService statistics) {
+        ItemView item = chooseItem(console, user, comments);
+        if (item == null) { return; }
+        CommentStatistics result = statistics.commentStatsFor(user, item.itemId());
+        System.out.printf("商品：%s（编号%d）%n统计范围：该商品的全部评论。%n评论条数：%d%n",
+                item.title(), item.itemId(), result.commentCount());
+        if (result.averageRating() == null) {
+            System.out.println("平均评分：暂无评分");
+        } else {
+            System.out.printf(Locale.ROOT, "平均评分：%.2f/5%n", result.averageRating());
+        }
+        System.out.println("评分 | 评论条数");
+        for (int score = 1; score <= 5; score++) {
+            System.out.printf("%d分 | %d%n", score, result.ratingCounts().get(score - 1));
+        }
+        LOG.info("商城评论聚合完成，商品编号={}，评论条数={}", item.itemId(), result.commentCount());
     }
 
     private static ItemView chooseItem(Console console, AuthenticatedUser user, CommentService comments) {

@@ -7,6 +7,7 @@ import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.result.InsertOneResult;
 import com.sportsmall.exception.MallDataAccessException;
+import com.sportsmall.model.CommentStatistics;
 import com.sportsmall.model.CommentView;
 import org.bson.Document;
 import org.bson.types.ObjectId;
@@ -58,6 +59,74 @@ public final class CommentDao {
         } catch (MongoException exception) {
             throw new MallDataAccessException("COMMENT_QUERY_FAILED", "无法读取评论，请检查MongoDB连接与comments集合。");
         }
+    }
+
+    public CommentStatistics statisticsByItemId(long itemId) {
+        if (itemId < 1) {
+            throw new IllegalArgumentException("统计的商品编号必须大于0");
+        }
+        try {
+            Document result = collection.aggregate(statisticsPipeline(itemId)).first();
+            return result == null ? CommentStatistics.empty(itemId) : mapStatistics(result, itemId);
+        } catch (MongoException exception) {
+            throw new MallDataAccessException("COMMENT_STATISTICS_FAILED", "无法完成评论统计，请检查MongoDB连接与comments集合。");
+        }
+    }
+
+    /** 一条业务管道：先筛选商品，再由MongoDB计算全部评论，未使用最新评论的20条上限。 */
+    static List<Document> statisticsPipeline(long itemId) {
+        Document validRating = new Document("$and", List.of(
+                new Document("$eq", List.of(new Document("$type", "$rating"), "int")),
+                new Document("$in", List.of("$rating", List.of(1, 2, 3, 4, 5)))));
+        Document group = new Document("_id", "$item_id")
+                .append("comment_count", new Document("$sum", 1))
+                .append("average_rating", new Document("$avg", "$rating"))
+                // $avg可能忽略非数值；明确记录不合设计的评分，避免把部分均分当作完整结果。
+                .append("invalid_rating_count", new Document("$sum", new Document("$cond", List.of(validRating, 0, 1))));
+        for (int score = 1; score <= 5; score++) {
+            group.append("rating_" + score + "_count", new Document("$sum",
+                    new Document("$cond", List.of(new Document("$eq", List.of("$rating", score)), 1, 0))));
+        }
+        return List.of(new Document("$match", new Document("item_id", itemId)), new Document("$group", group));
+    }
+
+    static CommentStatistics mapStatistics(Document document, long expectedItemId) {
+        long itemId = nonnegativeInteger(document.get("_id"));
+        long count = nonnegativeInteger(document.get("comment_count"));
+        if (itemId != expectedItemId || count < 1 || nonnegativeInteger(document.get("invalid_rating_count")) != 0
+                || !(document.get("average_rating") instanceof Double average)
+                || !Double.isFinite(average) || average < 1 || average > 5) {
+            throw invalidStatistics();
+        }
+        List<Long> distribution = new ArrayList<>();
+        long sum = 0;
+        double weightedSum = 0;
+        for (int score = 1; score <= 5; score++) {
+            long value = nonnegativeInteger(document.get("rating_" + score + "_count"));
+            distribution.add(value);
+            try {
+                sum = Math.addExact(sum, value);
+            } catch (ArithmeticException exception) {
+                throw invalidStatistics();
+            }
+            weightedSum += (double) value * score;
+        }
+        if (sum != count || Math.abs(weightedSum / count - average) > 1e-9) {
+            throw invalidStatistics();
+        }
+        return new CommentStatistics(itemId, count, average, distribution);
+    }
+
+    private static long nonnegativeInteger(Object value) {
+        if (!(value instanceof Integer || value instanceof Long) || ((Number) value).longValue() < 0) {
+            throw invalidStatistics();
+        }
+        return ((Number) value).longValue();
+    }
+
+    private static MallDataAccessException invalidStatistics() {
+        return new MallDataAccessException("COMMENT_STATISTICS_DATA_INVALID",
+                "评论统计包含不合设计的评分或不一致结果，请检查comments的评分类型及范围。");
     }
 
     static Document commentDocument(ObjectId id, long userId, long itemId, String content,

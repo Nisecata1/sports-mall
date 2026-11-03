@@ -24,7 +24,9 @@ Gitee 仓库：[Nisegitee/sports-mall](https://gitee.com/Nisegitee/sports-mall)�
 
 订单查询筛选已按要求书4.1接入菜单4，支持状态及创建日期组合，各项可留空。73项JUnit与28项隔离SQL/JDBC断言通过。用户于2026-11-03登录后查询“已取消2、2026-10-31至2026-10-31”，实际读回订单1及历史金额100.00；改查同日期的“待处理0”得到无匹配记录，再正常退出。由此确认新版筛选的正常匹配与空结果流程。
 
-本轮接入要求书4.1的评分与文字评论：菜单6发表评论，菜单7按商品查看最新20条。Java核对MySQL登录账号和在售商品，再以Long编号将评论、评分、tags数组及BSON日期写入MongoDB comments。99项JUnit及新增16项隔离双库检查通过，新版JAR已构建；主库首条评论仍待用户亲手保存、查询。评论聚合、完整CRUD及其余统计继续补齐。
+评分与文字评论已接入菜单6，菜单7按商品查看最新20条。用户于2026-11-03 11:58:23为商品1保存评论6ae95bdfba7016eb80e6f916：用户1、5分、文字“这是一条课程项目演示评论。”、标签训练/篮球；随后菜单7读回相同评论编号及内容，确认正常写入与查询。评论版本c2e6bb2已推送。
+
+本轮接入菜单8评论聚合：由MongoDB计算所选商品全部评论的条数、平均评分及1至5分分布。116项JUnit及扩充后的24项评论双库检查通过，新版JAR已构建；主库菜单8结果待手操。这是课程至少3条业务聚合管道中的第1条，热门排行、用户报告及其余功能继续补齐。
 
 ## 1. 当前正式工程目录
 
@@ -155,6 +157,8 @@ flowchart LR
 | `src/main/java/com/sportsmall/service/CommentService.java` | 从当前身份取用户编号，校验评分/文字/标签并核对MySQL商品，再协调MongoDB读写 |
 | `src/main/java/com/sportsmall/dao/mongo/CommentDao.java` | comments写入确认、BSON类型映射，按商品及时间/_id倒序读最新记录 |
 | `src/main/java/com/sportsmall/model/CommentView.java` | 一条评论的显示对象，含评论编号、两库引用、评分、标签及时间 |
+| `src/main/java/com/sportsmall/service/StatisticsService.java` | 核对当前账号与商品，协调调用MongoDB统计，后续承接其他业务报表 |
+| `src/main/java/com/sportsmall/model/CommentStatistics.java` | 一份商品评论汇总结果；无评论时平均分为空，评分分布按1至5分排列 |
 | `src/main/java/com/sportsmall/service/UserAccountService.java` | 用已登录身份限定本人记录，校验电话、检查账号状态并协调保存与回读 |
 | `src/main/java/com/sportsmall/model/UserAccount.java` | 用户可显示资料，不查询或携带密码哈希 |
 | `src/main/java/com/sportsmall/service/OrderService.java` | 用登录身份协调商品选择、创建订单及本人订单查询 |
@@ -685,6 +689,55 @@ db.comments.find({item_id: Long("1")}).sort({created_at: -1, _id: -1}).limit(3)
 
 2026-11-03T11:44:55+08:00离线clean package成功，33个生产Java源文件、11个测试源文件编译，99项JUnit通过（原73+评论业务16+BSON映射10），0失败0错误。另在工程外同时启动独立MySQL8.4.13及MongoDB8.0.34实例，先在Python和Java中核对两者datadir/dbPath，再用合成数据通过16项评论集成检查：在售商品读取、实际评论写入与读回、中文和补充平面字符、Long/整数/Date/数组类型、他人公开评论、空标签、停用账号/无效商品拒绝、无多余写入、最新20条上限及同时间排序、评论索引存在。mongodb_init.js也在隔离MongoDB执行成功。实例已停止、测试目录已清理，辅助源码/结果均留在工程外；未连接用户18306/27017商城实例。主库菜单6/7结果待用户执行，数量配额、三项聚合、完整MongoDB CRUD及真实断连仍待补齐。
 
+2026-11-03补充主库证据：用户11:58:23保存评论6ae95bdfba7016eb80e6f916，随后菜单7重新查到同一编号、用户1/商品1、5分、演示文字和训练/篮球标签，再正常退出。前述构建时“待用户执行”的评论正常流程现已确认。
+
+## 商品评论聚合统计：菜单8
+
+对应要求书4.1“评论聚合”及4.2 MongoDB Aggregation Pipeline。当前只实现评论这一条业务管道，3.2.2至少3条的数量要求尚未满足；热门排行及用户活动报告后续各自落实。
+
+```mermaid
+flowchart LR
+    A["菜单8：选择商品1"] --> B["StatisticsService：核对身份和商品"]
+    B --> C["MongoDB $match：商品1的全部评论"]
+    C --> D["MongoDB $group：条数、均分、评分分布"]
+    D --> E["Java显示一份汇总结果"]
+```
+
+### 1. 在现有工程目录启动并登录
+
+```powershell
+java -jar .\target\sports-mall-0.1.0.jar login
+```
+
+沿用当前UTF-8终端、MALL_DB_PASSWORD及mall_user01的商城密码，新版JAR已经构建。原理与架构目的：登录入口建立身份并复用两库连接，菜单将统计意图交给业务层。
+
+### 2. 输入8，再选择商品编号1
+
+原理与架构目的：StatisticsService检查账号及在售商品；CommentDao向MongoDB发起一条包含$match和$group两阶段的聚合管道。$match选取商品1，$group计算评论总数、平均评分和各评分条数，Java接收并显示汇总。菜单7最多展示20条，菜单8统计该商品全部评论；统计结果由查询时计算，不写回comments。
+
+按目前用户已确认的1条5分评论，预期如下；如另有新增评论，以实时结果为准。
+
+```text
+商品：训练篮球（编号1）
+统计范围：该商品的全部评论。
+评论条数：1
+平均评分：5.00/5
+评分 | 评论条数
+1分 | 0
+2分 | 0
+3分 | 0
+4分 | 0
+5分 | 1
+```
+
+条数代表评论文档数量，同一用户可有多条评论，因此不把它叫作评价人数。无评论时条数及分布均为0，平均分显示“暂无评分”；连接失败或评分字段不合设计时单独报错。MongoDB的$avg可忽略非数值，本工程额外统计无效评分并拒绝不完整结果，避免误报均分。完成后输入0退出。
+
+官方实现依据：[MongoDB Java聚合管道](https://www.mongodb.com/docs/drivers/java/sync/current/aggregation/)、[$avg行为](https://www.mongodb.com/docs/v8.3/reference/operator/aggregation/avg/)。
+
+### 本轮验证范围
+
+2026-11-03T12:09:32+08:00离线clean package成功，35个生产Java源文件、13个测试源文件编译，116项JUnit通过（原99+统计业务8+统计结果映射9），0失败0错误。工程外隔离双库检查扩充至24项（原评论16+聚合8），核对空评论无均分、单条5分、两条4.5均分、23条全部计入且与分布吻合、统计不写入、不同商品隔离、无效字符串评分明确拒绝以及移除隔离异常样本后的恢复。实际计算由MongoDB8.0.34执行，本轮测试实例/目录已清理；未连接用户18306/27017实例。主库评论新增/读取已有用户证据，主库菜单8仍待用户执行。此前订单28项隔离检查保留，未因本轮无关改动重复运行。
+
 ## 实现约定与后续事项
 
 - 商品必须有分类，分类可以没有上级；因此两处关联字段的可空性不同。
@@ -692,7 +745,7 @@ db.comments.find({item_id: Long("1")}).sort({created_at: -1, _id: -1}).limit(3)
 - 首次只读连接沿用你已验证的本机账号；进入完整写入功能时完善应用专用账号与权限。
 - 当前连接参数仅面向本机开发：关闭 TLS 并允许认证公钥获取。部署时需按部署环境另行配置。
 - price迁移已完成，用户实际下单、取消并读回订单1，金额均为100.00。改价历史金额、插入回滚及过程回滚已在隔离MySQL验证；并发/断连继续补齐。本机不重复执行建表或单价迁移。
-- 现有99项JUnit5测试通过，另有28项订单SQL/JDBC及16项评论双库隔离检查；这些与用户主库实际运行证据分别记录。完整权限、并发、其他业务与正式测试报告继续补齐。
+- 现有116项JUnit5测试通过，另有28项订单SQL/JDBC及24项评论/聚合双库隔离检查；这些与用户主库实际运行证据分别记录。完整权限、并发、其他业务与正式测试报告继续补齐。
 - 下单及本人订单查询936be50已推送Gitee；取消、两个触发器及首个存储过程随本次版本保存，后续按真实开发日期持续提交。10-29没有提交，不回填日期。
 - 代码使用 AI 辅助编写；用户亲手配置和运行。最终按老师要求标注大模型使用，保存真实开发、测试证据。
 
@@ -718,6 +771,8 @@ db.comments.find({item_id: Long("1")}).sort({created_at: -1, _id: -1}).limit(3)
 - `COMMENT_ITEM_NOT_AVAILABLE`：重新从在售商品列表选择。
 - `COMMENT_SAVE_UNCONFIRMED`：先按评论编号查看最新评论，再决定是否重试新增。
 - `COMMENT_QUERY_FAILED` / `COMMENT_DATA_INVALID`：分别检查MongoDB连接和comments字段类型。
+- `COMMENT_STATISTICS_FAILED`：检查MongoDB连接及聚合查询权限。
+- `COMMENT_STATISTICS_DATA_INVALID`：检查所选商品评论的评分类型/范围及统计结果是否一致。
 
 ## 两库组合检查记录（2026-10-30）
 

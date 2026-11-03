@@ -16,6 +16,7 @@ import com.sportsmall.service.UserLoginService;
 import com.sportsmall.service.UserAccountService;
 import com.sportsmall.service.OrderService;
 import com.sportsmall.service.CommentService;
+import com.sportsmall.service.StatisticsService;
 import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,9 +65,11 @@ public final class LoginCommand {
                 System.out.println("本次登录结果已保存到MongoDB的sports_mall.system_logs。");
                 LOG.info("商城用户登录成功，用户编号={}，角色={}", user.userId(), user.role());
                 UserAccountService accounts = new UserAccountService(new UserDao(dataSource));
-                CommentService comments = new CommentService(accounts, new ItemDao(dataSource),
-                        new CommentDao(mongoClient.getDatabase(mongoConfig.database())));
-                AccountMenu.run(console, user, accounts, new OrderService(accounts, new OrderDao(dataSource)), comments);
+                ItemDao items = new ItemDao(dataSource);
+                CommentDao commentDao = new CommentDao(mongoClient.getDatabase(mongoConfig.database()));
+                CommentService comments = new CommentService(accounts, items, commentDao);
+                StatisticsService statistics = new StatisticsService(accounts, items, commentDao);
+                AccountMenu.run(console, user, accounts, new OrderService(accounts, new OrderDao(dataSource)), comments, statistics);
             }
             return 0;
         } catch (MallBusinessException exception) {
