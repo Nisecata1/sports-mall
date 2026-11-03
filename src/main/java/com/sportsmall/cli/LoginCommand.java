@@ -11,6 +11,7 @@ import com.sportsmall.dao.mongo.ItemDetailDao;
 import com.sportsmall.dao.mongo.SystemLogDao;
 import com.sportsmall.dao.mysql.UserDao;
 import com.sportsmall.dao.mysql.OrderDao;
+import com.sportsmall.dao.mysql.AccountOverviewDao;
 import com.sportsmall.exception.MallBusinessException;
 import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.AuthenticatedUser;
@@ -20,6 +21,7 @@ import com.sportsmall.service.OrderService;
 import com.sportsmall.service.CommentService;
 import com.sportsmall.service.StatisticsService;
 import com.sportsmall.service.BrowsingService;
+import com.sportsmall.service.AccountOverviewService;
 import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,7 +77,8 @@ public final class LoginCommand {
                 StatisticsService statistics = new StatisticsService(accounts, items, commentDao, actionDao);
                 BrowsingService browsing = new BrowsingService(accounts, items,
                         new ItemDetailDao(mongoClient.getDatabase(mongoConfig.database())), actionDao);
-                AccountMenu.run(console, user, accounts, new OrderService(accounts, new OrderDao(dataSource)), comments, statistics, browsing);
+                AccountOverviewService overviews = new AccountOverviewService(accounts, new AccountOverviewDao(dataSource));
+                AccountMenu.run(console, user, accounts, new OrderService(accounts, new OrderDao(dataSource)), comments, statistics, browsing, overviews);
             }
             return 0;
         } catch (MallBusinessException exception) {

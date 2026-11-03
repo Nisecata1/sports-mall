@@ -30,7 +30,9 @@ Gitee 仓库：[Nisegitee/sports-mall](https://gitee.com/Nisegitee/sports-mall)�
 
 菜单9浏览及菜单10排行已于2026-11-03由用户实操确认：14:05:40为用户1/商品1保存行为6ae979b446c0e4bd00264a05，停留5秒；随后近7天排行显示训练篮球1次、累计5秒。浏览及排行版本c901314已推送。
 
-本轮接入菜单11“我的近7天活动报告”，按当前登录用户统计VIEW次数、不同商品数、北京时间活跃日期数、累计停留及最近浏览时间。159项JUnit和扩充后的44项双库隔离检查通过，新版JAR已构建；主库报告待手操。评论、排行、用户报告三条业务管道均已接入，评论和排行已有主库证据；完整CRUD、视图/月报、数据量、性能及正式文档仍继续补齐。
+菜单11本人活动报告已于2026-11-03 14:55:40实操确认：用户1近7天浏览1次、不同商品1、活跃日期1、停留5秒，最近浏览时间14:05:40。评论、热门排行、用户活动报告三条业务管道均已有主库正常执行证据。完整CRUD、视图/月报、数据量、性能及正式文档继续补齐。
+
+本轮准备两个MySQL视图及菜单12“我的资料与订单概览”：资料视图关联users/profiles，订单汇总视图按用户统计各状态数量和已完成金额。169项JUnit和14项隔离MySQL视图检查通过，新版JAR已构建；用户主库须先安装mysql_views.sql，再手操菜单12。五张业务表继续作为原始数据来源。
 
 ## 1. 当前正式工程目录
 
@@ -173,6 +175,9 @@ flowchart LR
 | `src/main/java/com/sportsmall/model/UserActivityStatistics.java` | 一名用户的浏览总量、商品/日期去重数量及最近浏览时间 |
 | `src/main/java/com/sportsmall/service/UserAccountService.java` | 用已登录身份限定本人记录，校验电话、检查账号状态并协调保存与回读 |
 | `src/main/java/com/sportsmall/model/UserAccount.java` | 用户可显示资料，不查询或携带密码哈希 |
+| `src/main/java/com/sportsmall/dao/mysql/AccountOverviewDao.java` | 用PreparedStatement按本人编号读取两个MySQL视图 |
+| `src/main/java/com/sportsmall/service/AccountOverviewService.java` | 校验当前身份、概览归属、订单数量及已完成金额口径 |
+| `src/main/java/com/sportsmall/model/AccountOverview.java` | 本人资料与订单汇总的Java显示对象 |
 | `src/main/java/com/sportsmall/service/OrderService.java` | 用登录身份协调商品选择、创建订单及本人订单查询 |
 | `src/main/java/com/sportsmall/dao/mysql/OrderDao.java` | 同事务检查用户/商品及价格、保存订单金额，按本人编号查询订单 |
 | `src/main/java/com/sportsmall/util/JdbcTransactions.java` | 显式setAutoCommit(false)、成功commit、异常时尝试rollback并关闭连接 |
@@ -185,6 +190,7 @@ flowchart LR
 | `src/main/java/com/sportsmall/dao/mongo/SystemLogDao.java` | 将登录结果写入system_logs，Long编号、BSON日期及嵌套操作信息 |
 | `src/test/java/com/sportsmall/dao/mongo/ItemDetailDaoTest.java` | 检查真实BSON类型映射的边界，不连接或修改数据库 |
 | `src/main/resources/sql/mysql_schema.sql` | 五表目标结构，供新数据库使用；现有表不会被 IF NOT EXISTS 自动改成新结构 |
+| `src/main/resources/sql/mysql_views.sql` | 安装/更新v_user_details及v_user_order_summary两个视图，保持原始记录 |
 | `src/main/resources/sql/mysql_triggers.sql` | 两个订单触发器：校验新增订单，保护后续状态及历史字段；须在商城库安装 |
 | `src/main/resources/sql/mysql_procedures.sql` | 当前含首个sp_cancel_order过程，由Java主动调用，事务由JDBC管理；月报过程待补 |
 | `src/main/resources/sql/mysql_migrate_001_item_price.sql` | 现有商品表补单价的分步迁移，检查后执行一次；不是初始化数据脚本 |
@@ -835,6 +841,64 @@ java -jar .\target\sports-mall-0.1.0.jar login
 
 首次clean遇到JAR占用，定位到14:08:54启动的Java进程；用户确认对应窗口退出后，独占打开检查通过。2026-11-03T14:16:58+08:00离线clean package成功，41个生产Java源文件和18个测试源文件编译，159项JUnit通过（原144+本人报告业务5+结果映射10），0失败0错误。隔离双库检查扩充至44项（原36+报告8）：本人/他人隔离、重复浏览和不同商品去重、日期去重、总时长/最近时间、空集、时间及VIEW筛选、北京时间午夜边界、7天窗口跨8日历日期、只读及无效时长拒绝。临时两实例及目录已清理，未访问18306/27017主库；主库菜单11结果待用户执行。三条业务聚合代码已齐，完整作业仍需CRUD、视图/第2过程、数据量、性能与正式材料。
 
+2026-11-03主库补充：用户14:55:40从菜单11实际读回本人浏览1次、不同商品1、停留5秒、活跃日期1、最近浏览14:05:40，再0退出。三条聚合的主库正常流程均已确认。
+
+## 两个MySQL视图与本人概览：菜单12
+
+对应项目要求书3.1.2“视图至少2个，如用户详情视图、业务汇总视图”。本轮采用v_user_details和v_user_order_summary。视图保存查询定义，读取时从原表取得关联/汇总结果；本项目仍是5张BASE TABLE，另有2个VIEW，不能把这两类都算作新增业务表。
+
+```mermaid
+flowchart LR
+    A["users＋profiles"] --> C["v_user_details：资料查询"]
+    B["users＋orders"] --> D["v_user_order_summary：订单汇总"]
+    C --> E["Java菜单12：本人概览"]
+    D --> E
+```
+
+### 1. 从项目根目录PowerShell进入MySQL客户端
+
+```powershell
+& "C:\develop\MySQL\mysql-8.4.13-winx64\bin\mysql.exe" --no-defaults --host=127.0.0.1 --port=18306 --user=root --password --default-character-set=utf8mb4 --database=sports_mall
+```
+
+输入MySQL连接密码。原理与架构目的：通过管理客户端安装数据库内的查询定义；客户端继承当前工程目录，下一步能读取ASCII相对路径SQL文件。
+
+### 2. 在mysql提示符安装两个视图并退出客户端
+
+```sql
+SOURCE src/main/resources/sql/mysql_views.sql;
+exit
+```
+
+原理与架构目的：SOURCE读取脚本并执行CREATE OR REPLACE VIEW，数据库保存两份查询定义；末尾应列出v_user_details和v_user_order_summary，SECURITY_TYPE为INVOKER。重放更新同名定义，业务记录保留。资料视图用LEFT JOIN保留尚无profiles记录的用户；订单汇总也保留无订单用户，数量及金额为0。
+
+SQL文件是可提交源码，数据库中的视图是执行后创建的对象。查询结果随原表数据变化；脚本只创建/替换定义，不替用户注册账号、填写档案或修改订单状态。官方依据：[MySQL CREATE VIEW](https://dev.mysql.com/doc/refman/8.4/en/create-view.html)。
+
+### 3. 回到PowerShell启动新版，登录并选择12
+
+```powershell
+java -jar .\target\sports-mall-0.1.0.jar login
+```
+
+沿用商城账号mall_user01及商城密码。原理与架构目的：AccountOverviewService从已验证身份取得user_id；AccountOverviewDao以固定SQL、PreparedStatement参数关联两个视图并仅返回本人结果。现有注册、登录、订单和聚合菜单继续使用原入口，视图安装状态只影响本轮概览功能。
+
+按目前已确认的订单1，预期如下；若已有其他业务变更，以实时数据库为准。
+
+| 指标 | 预期 |
+|---|---|
+| 真实姓名、地址 | 未填写（尚无档案） |
+| 总订单数 | 1 |
+| 待处理 | 0 |
+| 已完成 | 0 |
+| 已取消 | 1 |
+| 已完成订单金额 | 0.00元 |
+
+已取消订单仍计入总数和已取消数；已完成金额只累计状态1订单的orders.amount历史值，因此这笔100.00元已取消订单对已完成金额贡献0。资料视图不含password_hash；概览入口只显示姓名/地址及汇总，详细档案编辑后续补齐。完成后0退出。
+
+### 本轮验证范围
+
+JAR预检发现15:01:46启动的Java进程占用文件；用户确认对应窗口退出后，2026-11-03T15:09:57+08:00离线clean package成功。44个生产Java源文件及19个测试源文件编译，169项JUnit通过（原159+概览业务10），0失败0错误。工程外隔离MySQL检查14项通过：两个INVOKER视图、原始业务表仍5张、资料视图不含密码哈希、无档案/无订单、未知用户、下单后即时汇总、档案补充后结果更新、取消/完成分开统计、改价与待处理不改历史完成额、本人隔离、停用拒绝、只读及缺少视图的明确提示。重放SQL定义保留测试订单；测试实例及目录已清理，未连接用户18306主库。此前28项订单及44项双库检查保留，本轮未因无关功能重复运行；主库两个视图安装及菜单12结果待用户手操。
+
 ## 实现约定与后续事项
 
 - 商品必须有分类，分类可以没有上级；因此两处关联字段的可空性不同。
@@ -842,7 +906,7 @@ java -jar .\target\sports-mall-0.1.0.jar login
 - 首次只读连接沿用你已验证的本机账号；进入完整写入功能时完善应用专用账号与权限。
 - 当前连接参数仅面向本机开发：关闭 TLS 并允许认证公钥获取。部署时需按部署环境另行配置。
 - price迁移已完成，用户实际下单、取消并读回订单1，金额均为100.00。改价历史金额、插入回滚及过程回滚已在隔离MySQL验证；并发/断连继续补齐。本机不重复执行建表或单价迁移。
-- 现有159项JUnit5测试通过，另有28项订单SQL/JDBC及44项评论/浏览/三项聚合双库隔离检查；这些与用户主库实际运行证据分别记录。完整权限、并发、其他业务与正式测试报告继续补齐。
+- 现有169项JUnit5测试通过，另有28项订单、44项双库聚合及14项视图隔离检查；这些与用户主库实际运行证据分别记录。完整权限、并发、其他业务与正式测试报告继续补齐。
 - 下单及本人订单查询936be50已推送Gitee；取消、两个触发器及首个存储过程随本次版本保存，后续按真实开发日期持续提交。10-29没有提交，不回填日期。
 - 代码使用 AI 辅助编写；用户亲手配置和运行。最终按老师要求标注大模型使用，保存真实开发、测试证据。
 
@@ -874,6 +938,8 @@ java -jar .\target\sports-mall-0.1.0.jar login
 - `ACTION_LOG_UNCONFIRMED`：此次浏览写入未确认，保留行为编号查询，不自动重复写入。
 - `HOT_RANKING_FAILED` / `HOT_RANKING_DATA_INVALID`：分别检查MongoDB连接、行为编号及Long类型的非负时长。
 - `USER_ACTIVITY_QUERY_FAILED` / `USER_ACTIVITY_DATA_INVALID`：分别检查MongoDB连接及本人行为字段/汇总结果的一致性。
+- `OVERVIEW_VIEWS_NOT_INSTALLED`：先在MySQL的sports_mall执行mysql_views.sql。
+- `OVERVIEW_QUERY_FAILED` / `OVERVIEW_DATA_INVALID`：检查视图依赖、本人编号及状态/金额汇总口径。
 
 ## 两库组合检查记录（2026-10-30）
 
