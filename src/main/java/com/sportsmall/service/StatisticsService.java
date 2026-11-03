@@ -1,14 +1,20 @@
 package com.sportsmall.service;
 
 import com.sportsmall.dao.ItemDao;
+import com.sportsmall.dao.mongo.ActionLogDao;
 import com.sportsmall.dao.mongo.CommentDao;
 import com.sportsmall.exception.MallBusinessException;
 import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.AuthenticatedUser;
 import com.sportsmall.model.CommentStatistics;
+import com.sportsmall.model.HotItemStatistics;
 import com.sportsmall.model.ItemView;
 import com.sportsmall.model.UserAccount;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -17,16 +23,20 @@ public final class StatisticsService {
     private final AccountReader accounts;
     private final ItemReader items;
     private final CommentStatisticsReader comments;
+    private final HotItemReader hotItems;
+    private final Clock clock;
 
-    public StatisticsService(UserAccountService accounts, ItemDao items, CommentDao comments) {
+    public StatisticsService(UserAccountService accounts, ItemDao items, CommentDao comments, ActionLogDao actions) {
         this(Objects.requireNonNull(accounts)::viewMyAccount, Objects.requireNonNull(items)::findActiveById,
-                Objects.requireNonNull(comments)::statisticsByItemId);
+                Objects.requireNonNull(comments)::statisticsByItemId, Objects.requireNonNull(actions)::hotItems, Clock.systemUTC());
     }
 
-    StatisticsService(AccountReader accounts, ItemReader items, CommentStatisticsReader comments) {
+    StatisticsService(AccountReader accounts, ItemReader items, CommentStatisticsReader comments, HotItemReader hotItems, Clock clock) {
         this.accounts = Objects.requireNonNull(accounts);
         this.items = Objects.requireNonNull(items);
         this.comments = Objects.requireNonNull(comments);
+        this.hotItems = Objects.requireNonNull(hotItems);
+        this.clock = Objects.requireNonNull(clock);
     }
 
     public CommentStatistics commentStatsFor(AuthenticatedUser currentUser, long itemId) {
@@ -44,10 +54,26 @@ public final class StatisticsService {
         return result;
     }
 
+    public HotReport hotItemsFor(AuthenticatedUser currentUser) {
+        accounts.read(currentUser);
+        Instant through = clock.instant();
+        Instant from = through.minus(7, ChronoUnit.DAYS);
+        List<RankedItem> ranked = hotItems.read(from, through, 10).stream()
+                .map(row -> new RankedItem(row, items.find(row.itemId()))).toList();
+        return new HotReport(from, through, ranked);
+    }
+
+    public record RankedItem(HotItemStatistics statistics, Optional<ItemView> item) { }
+    public record HotReport(Instant fromInclusive, Instant throughInclusive, List<RankedItem> items) {
+        public HotReport { items = List.copyOf(items); }
+    }
+
     @FunctionalInterface
     interface AccountReader { UserAccount read(AuthenticatedUser currentUser); }
     @FunctionalInterface
     interface ItemReader { Optional<ItemView> find(long itemId); }
     @FunctionalInterface
     interface CommentStatisticsReader { CommentStatistics read(long itemId); }
+    @FunctionalInterface
+    interface HotItemReader { List<HotItemStatistics> read(Instant from, Instant through, int limit); }
 }

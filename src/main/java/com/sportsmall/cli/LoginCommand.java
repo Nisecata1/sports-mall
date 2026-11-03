@@ -6,6 +6,8 @@ import com.sportsmall.config.DatabaseConfig;
 import com.sportsmall.config.MongoConfig;
 import com.sportsmall.dao.ItemDao;
 import com.sportsmall.dao.mongo.CommentDao;
+import com.sportsmall.dao.mongo.ActionLogDao;
+import com.sportsmall.dao.mongo.ItemDetailDao;
 import com.sportsmall.dao.mongo.SystemLogDao;
 import com.sportsmall.dao.mysql.UserDao;
 import com.sportsmall.dao.mysql.OrderDao;
@@ -17,6 +19,7 @@ import com.sportsmall.service.UserAccountService;
 import com.sportsmall.service.OrderService;
 import com.sportsmall.service.CommentService;
 import com.sportsmall.service.StatisticsService;
+import com.sportsmall.service.BrowsingService;
 import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,9 +70,12 @@ public final class LoginCommand {
                 UserAccountService accounts = new UserAccountService(new UserDao(dataSource));
                 ItemDao items = new ItemDao(dataSource);
                 CommentDao commentDao = new CommentDao(mongoClient.getDatabase(mongoConfig.database()));
+                ActionLogDao actionDao = new ActionLogDao(mongoClient.getDatabase(mongoConfig.database()));
                 CommentService comments = new CommentService(accounts, items, commentDao);
-                StatisticsService statistics = new StatisticsService(accounts, items, commentDao);
-                AccountMenu.run(console, user, accounts, new OrderService(accounts, new OrderDao(dataSource)), comments, statistics);
+                StatisticsService statistics = new StatisticsService(accounts, items, commentDao, actionDao);
+                BrowsingService browsing = new BrowsingService(accounts, items,
+                        new ItemDetailDao(mongoClient.getDatabase(mongoConfig.database())), actionDao);
+                AccountMenu.run(console, user, accounts, new OrderService(accounts, new OrderDao(dataSource)), comments, statistics, browsing);
             }
             return 0;
         } catch (MallBusinessException exception) {
