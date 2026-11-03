@@ -28,7 +28,9 @@ Gitee 仓库：[Nisegitee/sports-mall](https://gitee.com/Nisegitee/sports-mall)�
 
 菜单8评论聚合已由用户于2026-11-03 13:47:23实操确认：商品1评论数1、平均5.00/5、5分1条，其余评分0条；商品编号留空返回菜单的流程也正常。该功能是课程至少3条业务聚合管道中的第1条。
 
-本轮接入菜单9浏览商品详情及菜单10近7天浏览排行。浏览时组合MySQL商品与MongoDB详情，按回车结束后向action_logs保存一次VIEW及实际停留整秒数；榜单按近7天浏览次数、累计停留秒数、商品编号排序，最多10项。这是第2条业务聚合管道，用户报告第3条继续补齐。144项JUnit及扩充后的36项双库隔离检查通过，新版JAR已构建；主库首次浏览及榜单仍待用户手操。
+菜单9浏览及菜单10排行已于2026-11-03由用户实操确认：14:05:40为用户1/商品1保存行为6ae979b446c0e4bd00264a05，停留5秒；随后近7天排行显示训练篮球1次、累计5秒。浏览及排行版本c901314已推送。
+
+本轮接入菜单11“我的近7天活动报告”，按当前登录用户统计VIEW次数、不同商品数、北京时间活跃日期数、累计停留及最近浏览时间。159项JUnit和扩充后的44项双库隔离检查通过，新版JAR已构建；主库报告待手操。评论、排行、用户报告三条业务管道均已接入，评论和排行已有主库证据；完整CRUD、视图/月报、数据量、性能及正式文档仍继续补齐。
 
 ## 1. 当前正式工程目录
 
@@ -161,13 +163,14 @@ flowchart LR
 | `src/main/java/com/sportsmall/service/CommentService.java` | 从当前身份取用户编号，校验评分/文字/标签并核对MySQL商品，再协调MongoDB读写 |
 | `src/main/java/com/sportsmall/dao/mongo/CommentDao.java` | comments写入确认、BSON类型映射，按商品及时间/_id倒序读最新记录 |
 | `src/main/java/com/sportsmall/model/CommentView.java` | 一条评论的显示对象，含评论编号、两库引用、评分、标签及时间 |
-| `src/main/java/com/sportsmall/service/StatisticsService.java` | 协调评论汇总与近7天浏览排行，关联MySQL商品名 |
+| `src/main/java/com/sportsmall/service/StatisticsService.java` | 协调评论汇总、近7天浏览排行及本人活动报告，限定身份与时间窗口 |
 | `src/main/java/com/sportsmall/model/CommentStatistics.java` | 一份商品评论汇总结果；无评论时平均分为空，评分分布按1至5分排列 |
 | `src/main/java/com/sportsmall/cli/BrowsingMenu.java` | 浏览详情、测量本次页面停留及显示热门排行 |
 | `src/main/java/com/sportsmall/service/BrowsingService.java` | 核对身份/商品、组合两库详情，结束时保存同一用户的VIEW行为 |
-| `src/main/java/com/sportsmall/dao/mongo/ActionLogDao.java` | 写action_logs的嵌套来源及Long时长；以聚合管道生成浏览排行 |
+| `src/main/java/com/sportsmall/dao/mongo/ActionLogDao.java` | 写action_logs；聚合浏览排行及按用户去重的活动报告 |
 | `src/main/java/com/sportsmall/model/ActionLogView.java` | 一次已确认保存的浏览行为摘要 |
 | `src/main/java/com/sportsmall/model/HotItemStatistics.java` | 时间窗口内每件商品的浏览次数和累计停留秒数 |
+| `src/main/java/com/sportsmall/model/UserActivityStatistics.java` | 一名用户的浏览总量、商品/日期去重数量及最近浏览时间 |
 | `src/main/java/com/sportsmall/service/UserAccountService.java` | 用已登录身份限定本人记录，校验电话、检查账号状态并协调保存与回读 |
 | `src/main/java/com/sportsmall/model/UserAccount.java` | 用户可显示资料，不查询或携带密码哈希 |
 | `src/main/java/com/sportsmall/service/OrderService.java` | 用登录身份协调商品选择、创建订单及本人订单查询 |
@@ -702,7 +705,7 @@ db.comments.find({item_id: Long("1")}).sort({created_at: -1, _id: -1}).limit(3)
 
 ## 商品评论聚合统计：菜单8
 
-对应要求书4.1“评论聚合”及4.2 MongoDB Aggregation Pipeline。当前只实现评论这一条业务管道，3.2.2至少3条的数量要求尚未满足；热门排行及用户活动报告后续各自落实。
+对应要求书4.1“评论聚合”及4.2 MongoDB Aggregation Pipeline。本节是第1条业务管道；另外两条见后文浏览排行及用户活动报告，分别由Java DAO发给MongoDB执行。
 
 ```mermaid
 flowchart LR
@@ -783,11 +786,54 @@ java -jar .\target\sports-mall-0.1.0.jar login
 
 原理与架构目的：StatisticsService确定滚动时间窗口；ActionLogDao在MongoDB依次$match时间与VIEW、$group商品计数/时长、$sort规则、$limit10，然后业务层关联MySQL商品名。历史商品当前不可浏览时仍保留编号及统计，名称栏注明当前不可浏览。
 
-如果此前没有浏览行为，完成一次菜单9后，预期榜单出现商品1训练篮球，浏览次数1；累计秒数与本次实际停留一致。已有其他浏览则显示实时累计值。排行查询不新增VIEW、不写回原始行为。完成后0退出；用户报告的第3条聚合将复用这些真实行为。
+如果此前没有浏览行为，完成一次菜单9后，预期榜单出现商品1训练篮球，浏览次数1；累计秒数与本次实际停留一致。已有其他浏览则显示实时累计值。排行查询不新增VIEW、不写回原始行为。完成后0退出；下节菜单11的用户报告复用这些真实行为。
 
 ### 本轮验证范围
 
 首次clean因旧JAR被占用失败；用户确认0退出后，2026-11-03T13:56:37+08:00离线clean package成功。40个生产Java源文件、16个测试源文件编译，144项JUnit通过（原116+浏览业务12+行为BSON/排行映射12+排行业务4），0失败0错误。隔离双库检查扩充至36项（原24+浏览/排行12），覆盖两库详情、实际VIEW写入及Long/Date/嵌套CLI来源、0秒浏览、写入后排行关联商品名、停用及身份错配拒绝、时间起止边界、排除旧/未来/非VIEW行为、次数优先/时长次序/编号稳定排序、服务端数量限制、只读与无效时长拒绝、索引存在。独立测试实例已关闭、目录已清理，未访问用户18306/27017主库。菜单9计时交互和主库榜单仍待用户执行，性能与完整数据量继续后续验收。
+
+2026-11-03主库补充：用户14:05:40经菜单9保存行为6ae979b446c0e4bd00264a05，商品1、用户1、停留5秒；菜单10在2026-10-27 14:05:50至2026-11-03 14:05:50范围返回训练篮球1次/5秒，再0退出。浏览正常计时/保存及主库排行已确认。
+
+## 我的近7天活动报告：菜单11
+
+对应要求书4.1用户报告及第3条业务聚合管道。工程口径：统计当前用户最近7×24小时的VIEW行为，起止时刻包含；浏览次数逐条累计，不同商品按item_id去重，活跃日期按Asia/Shanghai日历日期去重，时长累加，最近浏览时间取最大created_at。报告复用既有行为，不新增一份原始浏览数据。
+
+```mermaid
+flowchart LR
+    A["菜单11：当前登录身份"] --> B["筛选本人、近7天、VIEW"]
+    B --> C["按用户汇总；商品和北京时间日期去重"]
+    C --> D["显示一份本人活动报告"]
+```
+
+### 1. 在当前工程目录启动新版并登录
+
+```powershell
+java -jar .\target\sports-mall-0.1.0.jar login
+```
+
+新版JAR已构建，沿用终端编码、MALL_DB_PASSWORD及mall_user01。原理与架构目的：新进程加载菜单11，业务层从已经核验的账号取得user_id，界面不提供查询其他用户编号的输入。
+
+### 2. 输入11查看报告
+
+原理与架构目的：StatisticsService核对账号并确定滚动时间窗口；ActionLogDao的第3条业务管道依次$match本人/VIEW/时间、$group计数/时长/最近时间并以$addToSet去重、$project计算不同商品数与活跃日期数。MongoDB完成计算，Java负责显示；报告不依赖商品当前是否在售，也不把浏览次数当成不同商品数。
+
+如果期间没有新增浏览，按用户刚提供的记录，预期为：
+
+| 指标 | 预期 |
+|---|---|
+| 浏览次数 | 1 |
+| 不同商品数 | 1 |
+| 累计停留 | 5秒 |
+| 活跃日期数（北京时间） | 1 |
+| 最近浏览时间 | 2026-11-03 14:05:40 |
+
+同一商品看两次计两次浏览，商品去重数仍为1；同一北京时间日期内有多次浏览，活跃日期数仍为1。滚动7×24小时可能横跨8个日历日期，故不硬性限制活跃日期数为7。无浏览时所有数量为0，最近时间显示“暂无浏览”；失败查询单独报错。完成后0退出。
+
+日期由$dateToString显式指定Asia/Shanghai，以免默认UTC日期与北京时间跨零点时产生不同分组。[MongoDB官方日期与时区说明](https://www.mongodb.com/docs/manual/reference/operator/aggregation/datetostring/)。
+
+### 本轮验证范围
+
+首次clean遇到JAR占用，定位到14:08:54启动的Java进程；用户确认对应窗口退出后，独占打开检查通过。2026-11-03T14:16:58+08:00离线clean package成功，41个生产Java源文件和18个测试源文件编译，159项JUnit通过（原144+本人报告业务5+结果映射10），0失败0错误。隔离双库检查扩充至44项（原36+报告8）：本人/他人隔离、重复浏览和不同商品去重、日期去重、总时长/最近时间、空集、时间及VIEW筛选、北京时间午夜边界、7天窗口跨8日历日期、只读及无效时长拒绝。临时两实例及目录已清理，未访问18306/27017主库；主库菜单11结果待用户执行。三条业务聚合代码已齐，完整作业仍需CRUD、视图/第2过程、数据量、性能与正式材料。
 
 ## 实现约定与后续事项
 
@@ -796,7 +842,7 @@ java -jar .\target\sports-mall-0.1.0.jar login
 - 首次只读连接沿用你已验证的本机账号；进入完整写入功能时完善应用专用账号与权限。
 - 当前连接参数仅面向本机开发：关闭 TLS 并允许认证公钥获取。部署时需按部署环境另行配置。
 - price迁移已完成，用户实际下单、取消并读回订单1，金额均为100.00。改价历史金额、插入回滚及过程回滚已在隔离MySQL验证；并发/断连继续补齐。本机不重复执行建表或单价迁移。
-- 现有144项JUnit5测试通过，另有28项订单SQL/JDBC及36项评论/浏览/聚合双库隔离检查；这些与用户主库实际运行证据分别记录。完整权限、并发、其他业务与正式测试报告继续补齐。
+- 现有159项JUnit5测试通过，另有28项订单SQL/JDBC及44项评论/浏览/三项聚合双库隔离检查；这些与用户主库实际运行证据分别记录。完整权限、并发、其他业务与正式测试报告继续补齐。
 - 下单及本人订单查询936be50已推送Gitee；取消、两个触发器及首个存储过程随本次版本保存，后续按真实开发日期持续提交。10-29没有提交，不回填日期。
 - 代码使用 AI 辅助编写；用户亲手配置和运行。最终按老师要求标注大模型使用，保存真实开发、测试证据。
 
@@ -827,6 +873,7 @@ java -jar .\target\sports-mall-0.1.0.jar login
 - `BROWSE_ITEM_NOT_AVAILABLE`：从在售商品列表重新选择。
 - `ACTION_LOG_UNCONFIRMED`：此次浏览写入未确认，保留行为编号查询，不自动重复写入。
 - `HOT_RANKING_FAILED` / `HOT_RANKING_DATA_INVALID`：分别检查MongoDB连接、行为编号及Long类型的非负时长。
+- `USER_ACTIVITY_QUERY_FAILED` / `USER_ACTIVITY_DATA_INVALID`：分别检查MongoDB连接及本人行为字段/汇总结果的一致性。
 
 ## 两库组合检查记录（2026-10-30）
 

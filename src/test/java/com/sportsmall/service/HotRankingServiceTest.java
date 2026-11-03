@@ -28,7 +28,7 @@ class HotRankingServiceTest {
                     assertEquals(Instant.parse("2026-10-27T05:00:00Z"), from);
                     assertEquals(NOW, through); assertEquals(10, limit);
                     return List.of(new HotItemStatistics(7, 3, 20), new HotItemStatistics(8, 1, 0));
-                }, CLOCK);
+                }, (userId, from, through) -> fail("不应读取用户报告"), CLOCK);
         StatisticsService.HotReport report = service.hotItemsFor(USER);
         assertEquals(2, report.items().size());
         assertEquals("test item", report.items().get(0).item().orElseThrow().title());
@@ -39,7 +39,7 @@ class HotRankingServiceTest {
     @Test
     void emptyRankingRemainsAnOrdinaryEmptyReport() {
         StatisticsService service = new StatisticsService(current -> ACCOUNT, id -> fail("空排行不应读商品"),
-                id -> fail("不应统计评论"), (from, through, limit) -> List.of(), CLOCK);
+                id -> fail("不应统计评论"), (from, through, limit) -> List.of(), (userId, from, through) -> fail("不应读取用户报告"), CLOCK);
         assertTrue(service.hotItemsFor(USER).items().isEmpty());
     }
 
@@ -48,7 +48,7 @@ class HotRankingServiceTest {
         StatisticsService service = new StatisticsService(current -> ACCOUNT, id -> fail("不应读商品"),
                 id -> fail("不应统计评论"), (from, through, limit) -> {
                     throw new MallDataAccessException("HOT_RANKING_FAILED", "synthetic query failure");
-                }, CLOCK);
+                }, (userId, from, through) -> fail("不应读取用户报告"), CLOCK);
         assertEquals("HOT_RANKING_FAILED", assertThrows(MallDataAccessException.class, () -> service.hotItemsFor(USER)).code());
     }
 
@@ -56,7 +56,7 @@ class HotRankingServiceTest {
     void disabledUserCannotQueryRanking() {
         StatisticsService service = new StatisticsService(current -> {
             throw new MallBusinessException("ACCOUNT_DISABLED", "synthetic disabled account");
-        }, id -> fail("不应读商品"), id -> fail("不应统计评论"), (from, through, limit) -> fail("不应读排行"), CLOCK);
+        }, id -> fail("不应读商品"), id -> fail("不应统计评论"), (from, through, limit) -> fail("不应读排行"), (userId, from, through) -> fail("不应读取用户报告"), CLOCK);
         assertEquals("ACCOUNT_DISABLED", assertThrows(MallBusinessException.class, () -> service.hotItemsFor(USER)).code());
     }
 }

@@ -8,6 +8,7 @@ import com.mongodb.client.MongoDatabase;
 import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.ActionLogView;
 import com.sportsmall.model.HotItemStatistics;
+import com.sportsmall.model.UserActivityStatistics;
 import org.bson.Document;
 import org.bson.types.ObjectId;
 
@@ -56,6 +57,66 @@ public final class ActionLogDao {
         }
     }
 
+    public UserActivityStatistics activityForUser(long userId, Instant fromInclusive, Instant throughInclusive) {
+        Objects.requireNonNull(fromInclusive);
+        Objects.requireNonNull(throughInclusive);
+        if (userId < 1 || fromInclusive.isAfter(throughInclusive)) {
+            throw new IllegalArgumentException("用户报告的编号或时间范围无效");
+        }
+        try {
+            Document row = collection.aggregate(activityPipeline(userId, fromInclusive, throughInclusive)).first();
+            return row == null ? UserActivityStatistics.empty(userId) : mapActivity(row, userId);
+        } catch (MongoException exception) {
+            throw new MallDataAccessException("USER_ACTIVITY_QUERY_FAILED", "无法读取用户活动报告，请检查MongoDB连接与action_logs集合。");
+        }
+    }
+
+    static List<Document> activityPipeline(long userId, Instant from, Instant through) {
+        Document valid = new Document("$and", List.of(validViewExpression(),
+                new Document("$eq", List.of(new Document("$type", "$user_id"), "long"))));
+        Document day = new Document("$dateToString", new Document("format", "%Y-%m-%d")
+                .append("date", "$created_at").append("timezone", "Asia/Shanghai"));
+        return List.of(
+                new Document("$match", new Document("user_id", userId).append("action_type", "VIEW")
+                        .append("created_at", new Document("$gte", Date.from(from)).append("$lte", Date.from(through)))),
+                new Document("$group", new Document("_id", "$user_id")
+                        .append("view_count", new Document("$sum", 1))
+                        .append("duration_seconds", new Document("$sum", "$duration_seconds"))
+                        .append("item_ids", new Document("$addToSet", "$item_id"))
+                        .append("active_days", new Document("$addToSet", day))
+                        .append("last_viewed_at", new Document("$max", "$created_at"))
+                        .append("invalid_count", new Document("$sum", new Document("$cond", List.of(valid, 0, 1))))),
+                new Document("$project", new Document("_id", 1).append("view_count", 1).append("duration_seconds", 1)
+                        .append("last_viewed_at", 1).append("invalid_count", 1)
+                        .append("distinct_item_count", new Document("$size", "$item_ids"))
+                        .append("active_day_count", new Document("$size", "$active_days"))));
+    }
+
+    static UserActivityStatistics mapActivity(Document document, long expectedUserId) {
+        long userId = activityInteger(document.get("_id"));
+        long count = activityInteger(document.get("view_count"));
+        long distinct = activityInteger(document.get("distinct_item_count"));
+        long days = activityInteger(document.get("active_day_count"));
+        long duration = activityInteger(document.get("duration_seconds"));
+        if (userId != expectedUserId || count < 1 || distinct < 1 || distinct > count || days < 1 || days > count
+                || activityInteger(document.get("invalid_count")) != 0
+                || !(document.get("last_viewed_at") instanceof Date last)) {
+            throw invalidActivity();
+        }
+        return new UserActivityStatistics(userId, count, distinct, days, duration, last.toInstant());
+    }
+
+    private static long activityInteger(Object value) {
+        if (!(value instanceof Integer || value instanceof Long) || ((Number) value).longValue() < 0) {
+            throw invalidActivity();
+        }
+        return ((Number) value).longValue();
+    }
+
+    private static MallDataAccessException invalidActivity() {
+        return new MallDataAccessException("USER_ACTIVITY_DATA_INVALID", "用户活动统计含无效字段或不一致结果，请检查action_logs。");
+    }
+
     static Document viewDocument(ObjectId id, long userId, long itemId, long durationSeconds, Instant createdAt) {
         if (userId < 1 || itemId < 1 || durationSeconds < 0) {
             throw new IllegalArgumentException("浏览用户、商品或时长无效");
@@ -67,11 +128,7 @@ public final class ActionLogDao {
     }
 
     static List<Document> hotPipeline(Instant from, Instant through, int limit) {
-        Document valid = new Document("$and", List.of(
-                new Document("$eq", List.of(new Document("$type", "$item_id"), "long")),
-                new Document("$gt", List.of("$item_id", 0)),
-                new Document("$eq", List.of(new Document("$type", "$duration_seconds"), "long")),
-                new Document("$gte", List.of("$duration_seconds", 0))));
+        Document valid = validViewExpression();
         return List.of(
                 new Document("$match", new Document("action_type", "VIEW")
                         .append("created_at", new Document("$gte", Date.from(from)).append("$lte", Date.from(through)))),
@@ -81,6 +138,14 @@ public final class ActionLogDao {
                         .append("invalid_count", new Document("$sum", new Document("$cond", List.of(valid, 0, 1))))),
                 new Document("$sort", new Document("view_count", -1).append("duration_seconds", -1).append("_id", 1)),
                 new Document("$limit", limit));
+    }
+
+    private static Document validViewExpression() {
+        return new Document("$and", List.of(
+                new Document("$eq", List.of(new Document("$type", "$item_id"), "long")),
+                new Document("$gt", List.of("$item_id", 0)),
+                new Document("$eq", List.of(new Document("$type", "$duration_seconds"), "long")),
+                new Document("$gte", List.of("$duration_seconds", 0))));
     }
 
     static HotItemStatistics mapHotItem(Document document) {

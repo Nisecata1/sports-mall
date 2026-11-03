@@ -5,6 +5,7 @@ import com.sportsmall.model.ActionLogView;
 import com.sportsmall.model.AuthenticatedUser;
 import com.sportsmall.model.ItemDetail;
 import com.sportsmall.model.ItemView;
+import com.sportsmall.model.UserActivityStatistics;
 import com.sportsmall.service.BrowsingService;
 import com.sportsmall.service.StatisticsService;
 import org.slf4j.Logger;
@@ -63,6 +64,17 @@ public final class BrowsingMenu {
                 saved.actionId(), saved.itemId(), saved.durationSeconds());
         LOG.info("商品浏览记录已保存，行为编号={}，用户编号={}，商品编号={}",
                 saved.actionId(), saved.userId(), saved.itemId());
+    }
+
+    public static void showMyActivity(AuthenticatedUser user, StatisticsService statistics) {
+        StatisticsService.UserActivityReport report = statistics.myActivityFor(user);
+        UserActivityStatistics summary = report.summary();
+        System.out.printf("我的近7天浏览活动报告：%s（编号%d）%n统计范围：%s 至 %s%n",
+                user.username(), summary.userId(), TIME.format(report.fromInclusive()), TIME.format(report.throughInclusive()));
+        System.out.printf("浏览次数：%d%n不同商品数：%d%n累计停留：%d秒%n活跃日期数（北京时间）：%d%n最近浏览时间：%s%n",
+                summary.viewCount(), summary.distinctItemCount(), summary.durationSeconds(), summary.activeDayCount(),
+                summary.lastViewedAt() == null ? "暂无浏览" : TIME.format(summary.lastViewedAt()));
+        System.out.println("统计VIEW浏览行为；同一商品多次浏览计多次，不同商品和活跃日期分别去重。");
     }
 
     public static void showHot(AuthenticatedUser user, StatisticsService statistics) {

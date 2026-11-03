@@ -10,6 +10,7 @@ import com.sportsmall.model.CommentStatistics;
 import com.sportsmall.model.HotItemStatistics;
 import com.sportsmall.model.ItemView;
 import com.sportsmall.model.UserAccount;
+import com.sportsmall.model.UserActivityStatistics;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -24,18 +25,22 @@ public final class StatisticsService {
     private final ItemReader items;
     private final CommentStatisticsReader comments;
     private final HotItemReader hotItems;
+    private final UserActivityReader activities;
     private final Clock clock;
 
     public StatisticsService(UserAccountService accounts, ItemDao items, CommentDao comments, ActionLogDao actions) {
         this(Objects.requireNonNull(accounts)::viewMyAccount, Objects.requireNonNull(items)::findActiveById,
-                Objects.requireNonNull(comments)::statisticsByItemId, Objects.requireNonNull(actions)::hotItems, Clock.systemUTC());
+                Objects.requireNonNull(comments)::statisticsByItemId, Objects.requireNonNull(actions)::hotItems,
+                actions::activityForUser, Clock.systemUTC());
     }
 
-    StatisticsService(AccountReader accounts, ItemReader items, CommentStatisticsReader comments, HotItemReader hotItems, Clock clock) {
+    StatisticsService(AccountReader accounts, ItemReader items, CommentStatisticsReader comments, HotItemReader hotItems,
+                      UserActivityReader activities, Clock clock) {
         this.accounts = Objects.requireNonNull(accounts);
         this.items = Objects.requireNonNull(items);
         this.comments = Objects.requireNonNull(comments);
         this.hotItems = Objects.requireNonNull(hotItems);
+        this.activities = Objects.requireNonNull(activities);
         this.clock = Objects.requireNonNull(clock);
     }
 
@@ -63,6 +68,18 @@ public final class StatisticsService {
         return new HotReport(from, through, ranked);
     }
 
+    public UserActivityReport myActivityFor(AuthenticatedUser currentUser) {
+        UserAccount account = accounts.read(currentUser);
+        Instant through = clock.instant();
+        Instant from = through.minus(7, ChronoUnit.DAYS);
+        UserActivityStatistics summary = activities.read(account.userId(), from, through);
+        if (summary.userId() != account.userId()) {
+            throw new MallDataAccessException("USER_ACTIVITY_DATA_INVALID", "返回的用户报告与当前登录身份不一致。");
+        }
+        return new UserActivityReport(from, through, summary);
+    }
+
+    public record UserActivityReport(Instant fromInclusive, Instant throughInclusive, UserActivityStatistics summary) { }
     public record RankedItem(HotItemStatistics statistics, Optional<ItemView> item) { }
     public record HotReport(Instant fromInclusive, Instant throughInclusive, List<RankedItem> items) {
         public HotReport { items = List.copyOf(items); }
@@ -76,4 +93,6 @@ public final class StatisticsService {
     interface CommentStatisticsReader { CommentStatistics read(long itemId); }
     @FunctionalInterface
     interface HotItemReader { List<HotItemStatistics> read(Instant from, Instant through, int limit); }
+    @FunctionalInterface
+    interface UserActivityReader { UserActivityStatistics read(long userId, Instant from, Instant through); }
 }

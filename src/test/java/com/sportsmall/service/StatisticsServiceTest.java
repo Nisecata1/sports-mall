@@ -25,7 +25,7 @@ class StatisticsServiceTest {
                                                     StatisticsService.ItemReader items,
                                                     StatisticsService.CommentStatisticsReader comments) {
         return new StatisticsService(accounts, items, comments, (from, through, limit) -> fail("不应查询浏览排行"),
-                java.time.Clock.systemUTC());
+                (userId, from, through) -> fail("不应读取用户报告"), java.time.Clock.systemUTC());
     }
 
     @Test
