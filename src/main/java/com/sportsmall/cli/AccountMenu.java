@@ -9,6 +9,7 @@ import com.sportsmall.model.OrderableItem;
 import com.sportsmall.model.OrderView;
 import com.sportsmall.service.UserAccountService;
 import com.sportsmall.service.OrderService;
+import com.sportsmall.service.CommentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,10 +27,10 @@ public final class AccountMenu {
     }
 
     public static void run(Console console, AuthenticatedUser currentUser,
-                           UserAccountService accounts, OrderService orders) {
+                           UserAccountService accounts, OrderService orders, CommentService comments) {
         while (true) {
             console.printf("%n当前用户：%s（编号%d）%n", currentUser.username(), currentUser.userId());
-            console.printf("1. 查看我的账号资料%n2. 修改我的联系电话%n3. 创建订单%n4. 查看我的订单%n5. 取消我的待处理订单%n0. 退出登录%n");
+            console.printf("1. 查看我的账号资料%n2. 修改我的联系电话%n3. 创建订单%n4. 查看我的订单%n5. 取消我的待处理订单%n6. 发表评论%n7. 查看商品最新评论%n0. 退出登录%n");
             String option = console.readLine("请选择：");
             if (option == null || "0".equals(option.strip())) {
                 System.out.println("已退出登录，返回PowerShell。");
@@ -52,7 +53,9 @@ public final class AccountMenu {
                     case "3" -> createOrder(console, currentUser, orders);
                     case "4" -> queryOrders(console, currentUser, orders);
                     case "5" -> cancelOrder(console, currentUser, orders);
-                    default -> System.out.println("请选择0、1、2、3、4或5。");
+                    case "6" -> CommentMenu.post(console, currentUser, comments);
+                    case "7" -> CommentMenu.showLatest(console, currentUser, comments);
+                    default -> System.out.println("请选择0至7中的一个菜单编号。");
                 }
             } catch (MallBusinessException exception) {
                 LOG.warn("账号操作未完成，错误代码={}", exception.code());

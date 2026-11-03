@@ -22,7 +22,9 @@ Gitee 仓库：[Nisegitee/sports-mall](https://gitee.com/Nisegitee/sports-mall)�
 
 已接入菜单5取消本人待处理订单，新增两个订单触发器与sp_cancel_order存储过程的安装脚本。62项JUnit及21项隔离MySQL集成断言通过。用户于2026-11-01实操，23:47:56成功取消订单1，菜单4重新查询也显示已取消；金额仍100.00、创建时间仍2026-10-31 17:19:51。这确认主库取消过程及JDBC调用正常；尚未提供主库两个触发器的元数据输出，不将取消成功等同于两者定义均已核验。课程存储过程至少2个，目前第1个取消过程已使用，月报过程后续补齐。
 
-本轮另补要求书4.1的订单查询筛选：菜单4支持当前状态和订单创建日期的组合条件，各项可留空。73项JUnit与28项隔离SQL/JDBC断言通过，包括首尾午夜、状态组合、本人归属及空结果；新版JAR已构建，用户主库交互结果待实际运行。已有订单1保持已取消，不新增示例订单。
+订单查询筛选已按要求书4.1接入菜单4，支持状态及创建日期组合，各项可留空。73项JUnit与28项隔离SQL/JDBC断言通过。用户于2026-11-03登录后查询“已取消2、2026-10-31至2026-10-31”，实际读回订单1及历史金额100.00；改查同日期的“待处理0”得到无匹配记录，再正常退出。由此确认新版筛选的正常匹配与空结果流程。
+
+本轮接入要求书4.1的评分与文字评论：菜单6发表评论，菜单7按商品查看最新20条。Java核对MySQL登录账号和在售商品，再以Long编号将评论、评分、tags数组及BSON日期写入MongoDB comments。99项JUnit及新增16项隔离双库检查通过，新版JAR已构建；主库首条评论仍待用户亲手保存、查询。评论聚合、完整CRUD及其余统计继续补齐。
 
 ## 1. 当前正式工程目录
 
@@ -148,7 +150,11 @@ flowchart LR
 | `src/main/java/com/sportsmall/dao/mysql/UserDao.java` | 用PreparedStatement保存普通账号、按用户名读取登录凭据，处理唯一键冲突 |
 | `src/main/java/com/sportsmall/util/PasswordHasher.java` | JDK的PBKDF2加盐密码哈希与校验，供注册及后续登录复用 |
 | `src/main/java/com/sportsmall/cli/LoginCommand.java` | 本机登录入口，隐藏密码，管理两库连接及显示登录结果 |
-| `src/main/java/com/sportsmall/cli/AccountMenu.java` | 登录后菜单，查看资料、修改电话、下单、筛选本人订单及取消待处理订单 |
+| `src/main/java/com/sportsmall/cli/AccountMenu.java` | 登录后菜单，账号、订单及商品评论入口 |
+| `src/main/java/com/sportsmall/cli/CommentMenu.java` | 评论交互入口，选商品、填写评分文字标签、确认保存及查看最新评论 |
+| `src/main/java/com/sportsmall/service/CommentService.java` | 从当前身份取用户编号，校验评分/文字/标签并核对MySQL商品，再协调MongoDB读写 |
+| `src/main/java/com/sportsmall/dao/mongo/CommentDao.java` | comments写入确认、BSON类型映射，按商品及时间/_id倒序读最新记录 |
+| `src/main/java/com/sportsmall/model/CommentView.java` | 一条评论的显示对象，含评论编号、两库引用、评分、标签及时间 |
 | `src/main/java/com/sportsmall/service/UserAccountService.java` | 用已登录身份限定本人记录，校验电话、检查账号状态并协调保存与回读 |
 | `src/main/java/com/sportsmall/model/UserAccount.java` | 用户可显示资料，不查询或携带密码哈希 |
 | `src/main/java/com/sportsmall/service/OrderService.java` | 用登录身份协调商品选择、创建订单及本人订单查询 |
@@ -279,9 +285,9 @@ db.getCollectionNames()
 
 同样的创建、索引、插入与读取操作已保存到resources/sql/mongodb_init.js，便于后续重放；脚本遇到已有集合或已有商品详情会保留它们。脚本现已继续补齐以下三个集合和首批索引，但用户实际执行状态另行记录；不代表每集合至少20条、日志100+、三项聚合或完整初始化已经完成。
 
-## 补齐评论与两类日志：本轮手操
+## 评论与两类日志集合：首次准备记录
 
-本轮在mongosh的sports_mall库执行。MySQL用户表尚无已确认的业务账号，先创建空集合及索引；后续注册、登录、浏览和评论流程写入真正对应的记录。字段类型按集合设计PDF及Java写入校验落实，创建空集合或索引本身不自动设置所有字段的类型和必填规则。
+以下是首次准备时的步骤，用户现已创建四集合和首批索引，继续沿用。准备时MySQL用户表尚无已确认的业务账号，因此先建空集合及索引；后续已注册mall_user01并实际写入登录日志。字段类型按集合设计PDF及Java校验落实，创建空集合或索引本身不自动设置所有字段的类型和必填规则。
 
 ### 1. 创建三个集合
 
@@ -626,6 +632,59 @@ java -jar .\target\sports-mall-0.1.0.jar login
 
 离线clean package成功，29个生产Java源文件及9个测试源文件编译，73项JUnit5通过（原62+筛选条件7+查询业务4），0失败0错误。隔离MySQL实测扩充到28项断言（原21+筛选7），核对闰日零点与23:59:59、次日零点排除、状态/日期组合、用户归属、单边日期、空结果及全部条件留空；测试实例已停止并清理，仅使用工程外合成数据。未连接用户18306主库；用户菜单4的新版筛选交互尚待确认。查询性能及多条件商品分页继续后续测量，不以正确性断言代替性能结论。
 
+2026-11-03补充主库证据：用户实际查询已取消2及2026-10-31当天，返回订单1、100.00、已取消及原创建时间；同日范围改查待处理0得到“没有符合这些条件的订单”，随后正常退出。筛选正常匹配与空结果已由用户确认。
+
+## 发表评论与查看商品最新评论
+
+对应要求书4.1“互动管理：发表评论，MongoDB，评分+文字”及comments规定字段。使用现有MySQL账号/商品和MongoDB comments集合。工程选择：登录且状态正常的用户可对在售商品评论；评分为1至5整数，文字1至2000字符，标签最多5个、各20字符，可留空，同一用户可有多条评论。这些具体输入范围属于实现约定。
+
+```mermaid
+flowchart LR
+    A["菜单6：选择商品并填写评论"] --> B["CommentService"]
+    B --> C["MySQL：核对用户与商品"]
+    B --> D["MongoDB comments：新增文档"]
+    E["菜单7：选择商品"] --> B
+    D --> F["返回最新评论"]
+```
+
+### 1. 启动现有工程并登录
+
+```powershell
+java -jar .\target\sports-mall-0.1.0.jar login
+```
+
+在已设置UTF-8和MALL_DB_PASSWORD的项目根目录运行，使用mall_user01和商城密码。新版JAR已构建。原理与架构目的：复用当前登录身份和连接池/MongoClient；发表评论时的user_id由身份提供，界面只选择商品。
+
+### 2. 菜单6保存一条演示评论
+
+| 提示 | 演示输入 |
+|---|---|
+| 请选择 | 6 |
+| 商品编号 | 1 |
+| 评分 | 5 |
+| 评论文字 | 这是一条课程项目演示评论。 |
+| 标签 | 训练,篮球 |
+| 输入y保存评论 | y |
+
+原理与架构目的：入口收集输入，CommentService校验并整理标签、从登录结果取得user_id、查询MySQL账号状态及商品；CommentDao向comments新增一条文档，写入收到确认才报告成功。文档中的user_id/item_id是BSON Long、rating是整数、tags是真实数组、created_at是BSON日期，_id为该条评论的ObjectId。多个评论可以引用同一个商品。
+
+MySQL在此流程中只负责引用核对，写入目标是MongoDB。该核对不构成跨库外键或跨库原子事务；账号/商品在核对后被并发修改的完整一致性处理后续统一验收。写入结果不确定时显示此次评论编号并要求先查看，不自动重复新增。取消保存返回菜单。
+
+### 3. 菜单7查看商品1的最新评论
+
+选择7，再输入商品编号1。原理与架构目的：重新向MongoDB查询item_id=Long(1)，按created_at及_id倒序返回最多20条，并显示文字、评分、标签及本机时间。正常保存后应能在列表看到同一评论编号；空集合提示“该商品还没有评论”，连接/数据错误使用单独提示。这里展示该商品所有用户的最新评论，不限于本人。
+
+完成后0退出。此轮菜单操作即为主要实连证据；如需直接观察BSON，可在已连接的mongosh中执行：
+
+```javascript
+use sports_mall
+db.comments.find({item_id: Long("1")}).sort({created_at: -1, _id: -1}).limit(3)
+```
+
+### 本轮验证范围
+
+2026-11-03T11:44:55+08:00离线clean package成功，33个生产Java源文件、11个测试源文件编译，99项JUnit通过（原73+评论业务16+BSON映射10），0失败0错误。另在工程外同时启动独立MySQL8.4.13及MongoDB8.0.34实例，先在Python和Java中核对两者datadir/dbPath，再用合成数据通过16项评论集成检查：在售商品读取、实际评论写入与读回、中文和补充平面字符、Long/整数/Date/数组类型、他人公开评论、空标签、停用账号/无效商品拒绝、无多余写入、最新20条上限及同时间排序、评论索引存在。mongodb_init.js也在隔离MongoDB执行成功。实例已停止、测试目录已清理，辅助源码/结果均留在工程外；未连接用户18306/27017商城实例。主库菜单6/7结果待用户执行，数量配额、三项聚合、完整MongoDB CRUD及真实断连仍待补齐。
+
 ## 实现约定与后续事项
 
 - 商品必须有分类，分类可以没有上级；因此两处关联字段的可空性不同。
@@ -633,7 +692,7 @@ java -jar .\target\sports-mall-0.1.0.jar login
 - 首次只读连接沿用你已验证的本机账号；进入完整写入功能时完善应用专用账号与权限。
 - 当前连接参数仅面向本机开发：关闭 TLS 并允许认证公钥获取。部署时需按部署环境另行配置。
 - price迁移已完成，用户实际下单、取消并读回订单1，金额均为100.00。改价历史金额、插入回滚及过程回滚已在隔离MySQL验证；并发/断连继续补齐。本机不重复执行建表或单价迁移。
-- 现有73项JUnit5测试通过，另通过28项隔离SQL/JDBC集成断言；这些与用户主库的实际运行证据分别记录。完整权限、并发、其他业务与正式测试报告继续补齐。
+- 现有99项JUnit5测试通过，另有28项订单SQL/JDBC及16项评论双库隔离检查；这些与用户主库实际运行证据分别记录。完整权限、并发、其他业务与正式测试报告继续补齐。
 - 下单及本人订单查询936be50已推送Gitee；取消、两个触发器及首个存储过程随本次版本保存，后续按真实开发日期持续提交。10-29没有提交，不回填日期。
 - 代码使用 AI 辅助编写；用户亲手配置和运行。最终按老师要求标注大模型使用，保存真实开发、测试证据。
 
@@ -655,6 +714,10 @@ java -jar .\target\sports-mall-0.1.0.jar login
 - `ORDER_NOT_CANCELLABLE`：订单不属于本人、不存在或已不是待处理；重新查看订单。
 - `ORDER_CANCEL_UNCONFIRMED`：取消结果未确认，先查看订单状态并检查MySQL连接。
 - `INVALID_ORDER_FILTER`：检查订单状态、有效日期及开始日期不晚于结束日期，再重新查询。
+- `INVALID_COMMENT_CONTENT` / `INVALID_COMMENT_RATING` / `INVALID_COMMENT_TAGS`：按提示修改评论输入。
+- `COMMENT_ITEM_NOT_AVAILABLE`：重新从在售商品列表选择。
+- `COMMENT_SAVE_UNCONFIRMED`：先按评论编号查看最新评论，再决定是否重试新增。
+- `COMMENT_QUERY_FAILED` / `COMMENT_DATA_INVALID`：分别检查MongoDB连接和comments字段类型。
 
 ## 两库组合检查记录（2026-10-30）
 

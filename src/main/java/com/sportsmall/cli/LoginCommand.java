@@ -4,6 +4,8 @@ import com.mongodb.MongoException;
 import com.mongodb.client.MongoClient;
 import com.sportsmall.config.DatabaseConfig;
 import com.sportsmall.config.MongoConfig;
+import com.sportsmall.dao.ItemDao;
+import com.sportsmall.dao.mongo.CommentDao;
 import com.sportsmall.dao.mongo.SystemLogDao;
 import com.sportsmall.dao.mysql.UserDao;
 import com.sportsmall.dao.mysql.OrderDao;
@@ -13,6 +15,7 @@ import com.sportsmall.model.AuthenticatedUser;
 import com.sportsmall.service.UserLoginService;
 import com.sportsmall.service.UserAccountService;
 import com.sportsmall.service.OrderService;
+import com.sportsmall.service.CommentService;
 import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,7 +64,9 @@ public final class LoginCommand {
                 System.out.println("本次登录结果已保存到MongoDB的sports_mall.system_logs。");
                 LOG.info("商城用户登录成功，用户编号={}，角色={}", user.userId(), user.role());
                 UserAccountService accounts = new UserAccountService(new UserDao(dataSource));
-                AccountMenu.run(console, user, accounts, new OrderService(accounts, new OrderDao(dataSource)));
+                CommentService comments = new CommentService(accounts, new ItemDao(dataSource),
+                        new CommentDao(mongoClient.getDatabase(mongoConfig.database())));
+                AccountMenu.run(console, user, accounts, new OrderService(accounts, new OrderDao(dataSource)), comments);
             }
             return 0;
         } catch (MallBusinessException exception) {
