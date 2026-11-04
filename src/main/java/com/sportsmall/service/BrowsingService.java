@@ -29,6 +29,14 @@ public final class BrowsingService {
                 items::findActiveById, Objects.requireNonNull(details)::findByItemId, Objects.requireNonNull(actions)::recordView);
     }
 
+    public static BrowsingService forDesktop(UserAccountService accounts, ItemDao items,
+                                             ItemDetailDao details, ActionLogDao actions) {
+        return new BrowsingService(Objects.requireNonNull(accounts)::viewMyAccount,
+                Objects.requireNonNull(items)::findActive, items::findActiveById,
+                Objects.requireNonNull(details)::findByItemId,
+                Objects.requireNonNull(actions)::recordDesktopView);
+    }
+
     BrowsingService(AccountReader accounts, ItemListReader itemList, ItemReader items, DetailReader details, ViewWriter writer) {
         this.accounts = Objects.requireNonNull(accounts);
         this.itemList = Objects.requireNonNull(itemList);

@@ -28,7 +28,18 @@ public final class ActionLogDao {
     }
 
     public ActionLogView recordView(long userId, long itemId, long durationSeconds) {
+        return recordView(userId, itemId, durationSeconds, false);
+    }
+
+    public ActionLogView recordDesktopView(long userId, long itemId, long durationSeconds) {
+        return recordView(userId, itemId, durationSeconds, true);
+    }
+
+    private ActionLogView recordView(long userId, long itemId, long durationSeconds, boolean desktop) {
         Document document = viewDocument(new ObjectId(), userId, itemId, durationSeconds, Instant.now());
+        if (desktop) {
+            document.get("client_info", Document.class).put("client_type", "DESKTOP");
+        }
         String id = document.getObjectId("_id").toHexString();
         try {
             if (!collection.insertOne(document).wasAcknowledged()) {

@@ -25,6 +25,15 @@ public final class DatabaseConfig {
     }
 
     public static DatabaseConfig load() {
+        return load(System.getenv("MALL_DB_PASSWORD"));
+    }
+
+    /** 窗口入口可隐藏输入连接密码；不修改环境变量或配置文件。 */
+    public static DatabaseConfig loadWithPassword(char[] password) {
+        return load(password == null ? null : new String(password));
+    }
+
+    private static DatabaseConfig load(String password) {
         Properties properties = new Properties();
         try (InputStream input = DatabaseConfig.class.getResourceAsStream("/application.properties")) {
             if (input == null) {
@@ -39,7 +48,6 @@ public final class DatabaseConfig {
 
         String url = requiredProperty(properties, "db.url");
         String user = requiredProperty(properties, "db.user");
-        String password = System.getenv("MALL_DB_PASSWORD");
         if (password == null || password.isEmpty()) {
             throw new MallDataAccessException("PASSWORD_NOT_SET",
                     "尚未设置数据库密码。请在当前 PowerShell 执行：$env:MALL_DB_PASSWORD = Read-Host 'MySQL 密码' -MaskInput");

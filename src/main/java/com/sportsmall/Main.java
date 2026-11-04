@@ -3,6 +3,7 @@ package com.sportsmall;
 import com.zaxxer.hikari.HikariDataSource;
 import com.sportsmall.cli.RegisterCommand;
 import com.sportsmall.cli.LoginCommand;
+import com.sportsmall.desktop.MallDesktop;
 import com.mongodb.MongoException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoDatabase;
@@ -41,10 +42,14 @@ public final class Main {
             exitCode = RegisterCommand.run();
         } else if (args.length == 1 && "login".equals(args[0])) {
             exitCode = LoginCommand.run();
+        } else if (args.length == 1 && "gui".equals(args[0])) {
+            MallDesktop.open();
+            exitCode = 0;
         } else {
             System.out.println("运行商城：java -jar .\\target\\sports-mall-0.1.0.jar");
             System.out.println("注册账号：java -jar .\\target\\sports-mall-0.1.0.jar register");
             System.out.println("登录账号：java -jar .\\target\\sports-mall-0.1.0.jar login");
+            System.out.println("窗口界面：java -jar .\\target\\sports-mall-0.1.0.jar gui");
             exitCode = args.length == 1 && ("help".equals(args[0]) || "--help".equals(args[0])) ? 0 : 1;
         }
         if (exitCode != 0) {
