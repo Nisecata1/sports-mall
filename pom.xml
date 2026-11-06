@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.sportsmall</groupId>
     <artifactId>sports-mall</artifactId>
-    <version>0.2.1</version>
+    <version>0.2.2</version>
     <name>项目011 · 运动装备商城</name>
     <description>运动装备商城正式工程；首版入口从既有数据库读取商品。</description>
     <properties>

@@ -27,7 +27,7 @@ public final class HttpIntegrationProbe {
         try { action.run(); throw new AssertionError("Expected rejection: " + label); }
         catch (ApiException failure) { check(failure.status() == status, label); }
     }
-    private static HttpResponse<String> raw(URI base, String method, String path, String token, String body, String contentType) throws Exception {
+    static HttpResponse<String> raw(URI base, String method, String path, String token, String body, String contentType) throws Exception {
         var request = HttpRequest.newBuilder(base.resolve(path));
         if (token != null) request.header("Authorization", "Bearer " + token);
         if (contentType != null) request.header("Content-Type", contentType);
@@ -113,6 +113,7 @@ public final class HttpIntegrationProbe {
                 check(process.waitFor()==0 && output.contains("CLIENT_PROCESS_PASSED"),"separate client JVM works without database password or drivers");
                 other.logout();
                 checks += MonthlyOrderIntegrationChecks.run(address, sql);
+                checks += ProfileIntegrationChecks.run(address, sql);
             }
         }
         System.out.println("INTEGRATION_CHECKS_PASSED="+checks);

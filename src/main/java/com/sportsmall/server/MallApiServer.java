@@ -44,7 +44,7 @@ public final class MallApiServer implements AutoCloseable {
             respond(exchange, 400, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
         } catch (MallDataAccessException problem) {
             LOG.warn("接口数据操作未完成，代码={}", problem.code());
-            if (problem.code().startsWith("MONTHLY_REPORT_")) {
+            if (problem.code().startsWith("MONTHLY_REPORT_") || problem.code().startsWith("PROFILE_")) {
                 respond(exchange, 503, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
                 return;
             }
@@ -62,7 +62,7 @@ public final class MallApiServer implements AutoCloseable {
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.2.1", "status", "UP");
+            return Map.of("application", "sports-mall", "version", "0.2.2", "status", "UP");
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");
@@ -98,6 +98,17 @@ public final class MallApiServer implements AutoCloseable {
         }
         if (path.equals("/api/me/overview")) {
             requireMethod(method, "GET"); return services.overviews.viewMine(user);
+        }
+        if (path.equals("/api/me/profile")) {
+            if (method.equals("GET")) return services.profiles.viewMine(user);
+            if (method.equals("PUT")) {
+                var body = body(exchange, "realName", "idCard", "address", "notes");
+                return services.profiles.saveMine(user, text(body, "realName"), text(body, "idCard"),
+                        text(body, "address"), text(body, "notes"));
+            }
+            requireMethod(method, "DELETE");
+            body(exchange);
+            return new ApiDtos.ProfileDeletion(services.profiles.deleteMine(user));
         }
         if (path.equals("/api/me/orders/monthly")) {
             requireMethod(method, "GET");

@@ -46,6 +46,21 @@ public final class MallApiClient {
     public List<ItemView> items() { return request("GET", "/api/items", null, new TypeToken<List<ItemView>>(){}.getType()); }
     public UserAccount account() { return request("GET", "/api/me", null, UserAccount.class); }
     public AccountOverview overview() { return request("GET", "/api/me/overview", null, AccountOverview.class); }
+    public UserProfile profile() {
+        return request("GET", "/api/me/profile", null, UserProfile.class);
+    }
+    public UserProfile saveProfile(String realName, String idCard, String address, String notes) {
+        Map<String, String> body = new LinkedHashMap<>();
+        body.put("realName", realName);
+        body.put("idCard", idCard);
+        body.put("address", address);
+        body.put("notes", notes);
+        return request("PUT", "/api/me/profile", body, UserProfile.class);
+    }
+    public boolean deleteProfile() {
+        ApiDtos.ProfileDeletion result = request("DELETE", "/api/me/profile", Map.of(), ApiDtos.ProfileDeletion.class);
+        return result.deleted();
+    }
     public MonthlyOrderReport monthlyOrders(String month) {
         String encodedMonth = java.net.URLEncoder.encode(month, java.nio.charset.StandardCharsets.UTF_8);
         return request("GET", "/api/me/orders/monthly?month=" + encodedMonth, null, MonthlyOrderReport.class);

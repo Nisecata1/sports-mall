@@ -12,6 +12,7 @@ public final class ApiDtos {
     public record LoginResponse(String token, AuthenticatedUser user) {}
     public record ErrorResponse(String code, String message) {}
     public record PhoneChange(UserAccount account, boolean changed) {}
+    public record ProfileDeletion(boolean deleted) {}
     public record BrowseTicket(String browseId, ItemView item, Optional<ItemDetail> detail) {}
     public record RankedItem(HotItemStatistics statistics, Optional<ItemView> item) {}
     public record HotReport(Instant fromInclusive, Instant throughInclusive, List<RankedItem> items) {}

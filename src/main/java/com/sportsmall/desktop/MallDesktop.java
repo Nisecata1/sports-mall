@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -396,11 +397,13 @@ public final class MallDesktop extends JFrame {
     }
 
     private void showAccount() {
-        task("正在读取本人账号", () -> api.account(), account -> {
+        task("正在读取本人账号与档案", () -> new AccountData(api.account(), api.profile()), data -> {
+            UserAccount account = data.account();
             JPanel page = page("我的账号", "管理本人的账号信息与订单概览");
             JTextArea output = textArea("用户编号：" + account.userId() + "\n用户名：" + account.username()
                     + "\n邮箱：" + account.email() + "\n联系电话：" + optional(account.phone()) + "\n角色：" + account.role()
-                    + "\n状态：" + (account.status() == 1 ? "正常" : "停用"), 15, 40);
+                    + "\n状态：" + (account.status() == 1 ? "正常" : "停用")
+                    + "\n\n" + profileText(data.profile()), 15, 40);
             page.add(new JScrollPane(output), BorderLayout.CENTER);
             JPanel actions = row();
             actions.add(button("刷新资料", this::showAccount));
@@ -416,10 +419,60 @@ public final class MallDesktop extends JFrame {
                         + "\n已取消：" + s.cancelledCount() + "\n已完成金额：" + money(s.completedAmount()) + "元");
                 output.setCaretPosition(0);
             })));
-            page.add(actions, BorderLayout.SOUTH);
+            JPanel profileActions = row();
+            profileActions.add(button("编辑我的档案", () -> editProfile(data.profile())));
+            JButton deleteProfile = button("删除我的档案", () -> {
+                if (!confirm("删除你的档案？姓名、证件号码、地址和备注会被清除。")) return;
+                task("正在删除本人档案", () -> api.deleteProfile(), deleted -> {
+                    message(deleted ? "档案已删除。" : "当前已没有档案。");
+                    showAccount();
+                });
+            });
+            deleteProfile.setEnabled(data.profile().profileId() != null);
+            profileActions.add(deleteProfile);
+            JPanel controls = column();
+            controls.add(actions);
+            controls.add(profileActions);
+            page.add(controls, BorderLayout.SOUTH);
             display(page);
         });
     }
+
+    private void editProfile(UserProfile profile) {
+        JPanel form = column();
+        JTextField name = named(new JTextField(Objects.toString(profile.realName(), ""), 28), "档案姓名");
+        JTextField card = named(new JTextField(Objects.toString(profile.idCard(), ""), 28), "档案证件号码");
+        JTextArea address = named(new JTextArea(Objects.toString(profile.address(), ""), 3, 28), "档案地址");
+        JTextArea notes = named(new JTextArea(Objects.toString(profile.notes(), ""), 5, 28), "档案备注");
+        address.setLineWrap(true);
+        address.setWrapStyleWord(true);
+        notes.setLineWrap(true);
+        notes.setWrapStyleWord(true);
+        form.add(note(profile.profileId() == null ? "填写后保存即可建立个人档案。" : "编辑已保存的个人档案。"));
+        addField(form, "姓名（最多50字符，可留空）", name);
+        addField(form, "证件号码（最多20字符，可留空）", card);
+        addField(form, "地址（最多500字符，可留空）", new JScrollPane(address));
+        addField(form, "备注（最多2000字符，可留空）", new JScrollPane(notes));
+        if (JOptionPane.showConfirmDialog(this, form, "编辑我的档案",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
+        String realName = name.getText();
+        String idCard = card.getText();
+        String location = address.getText();
+        String noteText = notes.getText();
+        task("正在保存本人档案", () -> api.saveProfile(realName, idCard, location, noteText), saved -> {
+            message("档案已保存，档案编号 " + saved.profileId() + "。");
+            showAccount();
+        });
+    }
+
+    private static String profileText(UserProfile profile) {
+        if (profile.profileId() == null) return "个人档案尚未建立";
+        return "档案编号 " + profile.profileId() + "\n姓名 " + optional(profile.realName())
+                + "\n证件号码 " + optional(profile.idCard()) + "\n地址 " + optional(profile.address())
+                + "\n备注 " + optional(profile.notes());
+    }
+
+    private record AccountData(UserAccount account, UserProfile profile) { }
 
     private void logout() {
         task("正在退出登录", () -> {
