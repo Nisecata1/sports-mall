@@ -4,7 +4,7 @@ Dim files, shell, projectDir, jarPath, javaHome, javaExe, command
 Set files = CreateObject("Scripting.FileSystemObject")
 Set shell = CreateObject("WScript.Shell")
 projectDir = files.GetParentFolderName(WScript.ScriptFullName)
-jarPath = files.BuildPath(projectDir, "target\sports-mall-0.1.0.jar")
+jarPath = files.BuildPath(projectDir, "target\sports-mall-0.2.0-desktop.jar")
 
 If Not files.FileExists(jarPath) Then
     MsgBox "Build this project with mvnw.cmd package first.", vbExclamation, "Sports Mall"
@@ -23,7 +23,11 @@ Else
 End If
 
 shell.CurrentDirectory = projectDir
-command = """" & javaExe & """ -Dfile.encoding=UTF-8 -jar """ & jarPath & """ gui"
+Dim processEnv
+Set processEnv = shell.Environment("PROCESS")
+processEnv.Remove "MALL_DB_PASSWORD"
+processEnv.Remove "MALL_MONGO_URI"
+command = """" & javaExe & """ -Dfile.encoding=UTF-8 -jar """ & jarPath & """"
 On Error Resume Next
 shell.Run command, 1, False
 If Err.Number <> 0 Then

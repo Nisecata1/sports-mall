@@ -28,7 +28,7 @@ public final class DatabaseConfig {
         return load(System.getenv("MALL_DB_PASSWORD"));
     }
 
-    /** 窗口入口可隐藏输入连接密码；不修改环境变量或配置文件。 */
+    /** 供受控后端配置与隔离测试使用；窗口不引用数据库配置。 */
     public static DatabaseConfig loadWithPassword(char[] password) {
         return load(password == null ? null : new String(password));
     }

@@ -1,22 +1,9 @@
 package com.sportsmall.desktop;
 
-import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoDatabase;
-import com.sportsmall.config.DatabaseConfig;
-import com.sportsmall.config.MongoConfig;
-import com.sportsmall.dao.ItemDao;
-import com.sportsmall.dao.mongo.ActionLogDao;
-import com.sportsmall.dao.mongo.CommentDao;
-import com.sportsmall.dao.mongo.ItemDetailDao;
-import com.sportsmall.dao.mongo.SystemLogDao;
-import com.sportsmall.dao.mysql.AccountOverviewDao;
-import com.sportsmall.dao.mysql.OrderDao;
-import com.sportsmall.dao.mysql.UserDao;
+import com.sportsmall.client.ApiException;
+import com.sportsmall.client.MallApiClient;
 import com.sportsmall.exception.MallBusinessException;
-import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.*;
-import com.sportsmall.service.*;
-import com.zaxxer.hikari.HikariDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +28,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
-/** 窗口入口只组织交互；数据库操作复用已有业务层，放在SwingWorker后台执行。 */
+/** 窗口只组织交互并调用HTTP接口；业务与数据库连接位于独立后端进程。 */
 public final class MallDesktop extends JFrame {
     private static final Logger LOG = LoggerFactory.getLogger(MallDesktop.class);
     private static final Color GREEN = new Color(18, 109, 100);
@@ -54,10 +41,11 @@ public final class MallDesktop extends JFrame {
     private JPanel workspace;
     private JTextField username;
     private JPasswordField mallPassword;
-    private JPasswordField databasePassword;
-    private volatile Services services;
+    private final MallApiClient api = MallApiClient.load();
     private AuthenticatedUser currentUser;
     private boolean busy;
+
+    public static void main(String[] args) { open(); }
 
     public static void open() {
         if (GraphicsEnvironment.isHeadless()) {
@@ -124,14 +112,9 @@ public final class MallDesktop extends JFrame {
         form.add(note("使用已注册的商城账号"));
         username = named(new JTextField(22), "商城用户名");
         mallPassword = named(new JPasswordField(22), "商城密码");
-        databasePassword = named(new JPasswordField(22), "MySQL连接密码");
         addField(form, "商城用户名", username);
         addField(form, "商城密码", mallPassword);
-        addField(form, "MySQL连接密码", databasePassword);
-        boolean environmentReady = hasEnvironmentPassword();
-        databasePassword.setEnabled(services == null && !environmentReady);
-        form.add(note(services != null ? "数据库连接已准备。" : environmentReady
-                ? "连接密码已从当前启动环境读取。" : "仅用于连接本机数据库，与商城密码不同；不会写入文件。"));
+        form.add(note("商城账号由后端验证。"));
         form.add(Box.createVerticalStrut(20));
         JPanel actions = row();
         JButton login = button("登录", this::login);
@@ -139,7 +122,7 @@ public final class MallDesktop extends JFrame {
         actions.add(button("注册普通账号", this::register));
         form.add(actions);
         form.add(Box.createVerticalGlue());
-        form.add(note("MySQL 18306  /  MongoDB 27017"));
+        form.add(note("商城后端：" + api.address()));
         body.add(form, BorderLayout.CENTER);
         getRootPane().setDefaultButton(login);
         installStatus();
@@ -149,15 +132,12 @@ public final class MallDesktop extends JFrame {
     private void login() {
         String name = username.getText();
         char[] password = mallPassword.getPassword();
-        char[] dbPassword = databasePassword.getPassword();
         mallPassword.setText("");
-        databasePassword.setText("");
         task("正在登录并记录登录日志", () -> {
             try {
-                return ensureServices(dbPassword).login.login(name, password, "127.0.0.1");
+                return api.login(name, password);
             } finally {
                 Arrays.fill(password, '\0');
-                Arrays.fill(dbPassword, '\0');
             }
         }, user -> {
             currentUser = user;
@@ -183,17 +163,15 @@ public final class MallDesktop extends JFrame {
         }
         String enteredName = name.getText(), enteredEmail = email.getText(), enteredPhone = phone.getText();
         char[] first = password.getPassword(), second = confirmation.getPassword();
-        char[] dbPassword = databasePassword.getPassword();
-        password.setText(""); confirmation.setText(""); databasePassword.setText("");
+        password.setText(""); confirmation.setText("");
         task("正在注册普通用户", () -> {
             try {
-                return ensureServices(dbPassword).registration.register(enteredName, enteredEmail, enteredPhone, first, second);
+                return api.register(enteredName, enteredEmail, enteredPhone, first, second);
             } finally {
-                Arrays.fill(first, '\0'); Arrays.fill(second, '\0'); Arrays.fill(dbPassword, '\0');
+                Arrays.fill(first, '\0'); Arrays.fill(second, '\0');
             }
         }, result -> {
             username.setText(result.username());
-            databasePassword.setEnabled(false);
             message("注册成功，用户编号：" + result.userId() + "。\n现在可以使用商城密码登录。");
         });
     }
@@ -206,7 +184,7 @@ public final class MallDesktop extends JFrame {
         header.add(title("运动装备商城", 24), BorderLayout.WEST);
         JPanel account = row();
         account.add(new JLabel("当前用户：" + currentUser.username() + "  /  " + currentUser.role()));
-        account.add(button("退出登录", this::showLogin));
+        account.add(button("退出登录", this::logout));
         header.add(account, BorderLayout.EAST);
         body.add(header, BorderLayout.NORTH);
         JPanel navigation = column();
@@ -234,7 +212,7 @@ public final class MallDesktop extends JFrame {
     }
 
     private void showProducts() {
-        task("正在读取在售商品", () -> services.browsing.availableFor(currentUser), items -> {
+        task("正在读取在售商品", () -> api.items(), items -> {
             JPanel page = page("商品浏览", "选择商品查看详情或创建订单");
             JTable table = dataTable("在售商品", new String[]{"编号", "商品名称", "分类", "单价（元）"},
                     items.stream().map(item -> new Object[]{item.itemId(), item.title(), item.categoryName(), money(item.price())}).toList());
@@ -249,25 +227,23 @@ public final class MallDesktop extends JFrame {
     }
 
     private void browse(long itemId) {
-        task("正在读取商品详情", () -> services.browsing.openFor(currentUser, itemId), opened -> {
+        task("正在读取商品详情", () -> api.openItem(itemId), opened -> {
             StringBuilder text = new StringBuilder(opened.item().title()).append("\n\n分类：")
                     .append(opened.item().categoryName()).append("\n单价：").append(money(opened.item().price())).append("元\n\n");
             opened.detail().ifPresentOrElse(detail -> text.append(detail.description()).append("\n\n内容语言：")
                     .append(detail.language()).append("\n图片：")
                     .append(detail.images().isEmpty() ? "暂无图片" : String.join("\n", detail.images())),
                     () -> text.append("商品详情尚未填写。"));
-            long start = System.nanoTime();
             JOptionPane.showMessageDialog(this, scrollText(text.toString(), 15, 48),
                     "商品详情（关闭后保存本次浏览）", JOptionPane.PLAIN_MESSAGE);
-            long seconds = Math.max(0L, (System.nanoTime() - start) / 1_000_000_000L);
-            task("正在保存本次浏览", () -> services.browsing.finishFor(currentUser, opened, seconds),
+            task("正在保存本次浏览", () -> api.finishBrowse(opened.browseId()),
                     result -> status.setText("浏览已保存：" + result.durationSeconds() + "秒  /  " + result.actionId()));
         });
     }
 
     private void createOrder(ItemView item) {
         if (!confirm("购买“" + item.title() + "”，金额" + money(item.price()) + "元？")) return;
-        task("正在创建订单，请等待结果", () -> services.orders.createFor(currentUser, item.itemId(), item.price()),
+        task("正在创建订单，请等待结果", () -> api.createOrder(item.itemId(), item.price()),
                 result -> message("订单创建成功。\n订单编号：" + result.orderId() + "\n金额：" + money(result.amount()) + "元"));
     }
 
@@ -289,7 +265,7 @@ public final class MallDesktop extends JFrame {
             try {
                 OrderFilter filter = new OrderFilter(states.getSelectedIndex() == 0 ? null : states.getSelectedIndex() - 1,
                         date(from.getText()), date(through.getText()));
-                task("正在查询本人订单", () -> services.orders.findMine(currentUser, filter), found -> {
+                task("正在查询本人订单", () -> api.orders(filter), found -> {
                     rows[0] = found;
                     fill(table, found.stream().map(order -> new Object[]{order.orderId(), order.itemTitle(), money(order.amount()),
                             orderStatus(order.status()), TIME.format(order.createdAt())}).toList());
@@ -302,7 +278,7 @@ public final class MallDesktop extends JFrame {
         actions.add(button("取消选中的待处理订单", () -> selected(table, rows[0], order -> {
             if (order.status() != 0) { message("只能取消本人待处理订单。"); return; }
             if (!confirm("取消订单" + order.orderId() + "？")) return;
-            task("正在取消订单", () -> services.orders.cancelMine(currentUser, order.orderId()), result -> {
+            task("正在取消订单", () -> api.cancelOrder(order.orderId()), result -> {
                 message("订单" + result.orderId() + "已取消。");
                 query.run();
             });
@@ -316,7 +292,7 @@ public final class MallDesktop extends JFrame {
     private static List<OrderView>[] orderHolder() { return new List[]{List.of()}; }
 
     private void showComments() {
-        task("正在读取可评论商品", () -> services.comments.availableItemsFor(currentUser), items -> {
+        task("正在读取可评论商品", () -> api.items(), items -> {
             JPanel page = page("商品评论", "查看最新评论，或为在售商品写下评分与感受");
             JComboBox<ItemChoice> choice = choices(items, "评论商品");
             JPanel filters = row(); filters.add(new JLabel("商品")); filters.add(choice);
@@ -326,7 +302,7 @@ public final class MallDesktop extends JFrame {
             Runnable query = () -> {
                 ItemChoice item = (ItemChoice) choice.getSelectedItem();
                 if (item == null) { status.setText("当前没有可评论商品"); return; }
-                task("正在读取最新20条评论", () -> services.comments.latestFor(currentUser, item.item.itemId()),
+                task("正在读取最新20条评论", () -> api.comments(item.item.itemId()),
                         comments -> fill(table, comments.stream().map(comment -> new Object[]{comment.commentId(),
                                 comment.userId(), comment.rating(), comment.content(), String.join("，", comment.tags()),
                                 time(comment.createdAt())}).toList()));
@@ -355,7 +331,7 @@ public final class MallDesktop extends JFrame {
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
         String text = content.getText(), tagText = tags.getText();
         int score = (Integer) rating.getValue();
-        task("正在保存评论", () -> services.comments.post(currentUser, item.itemId(), text, score, tagText),
+        task("正在保存评论", () -> api.postComment(item.itemId(), text, score, tagText),
                 saved -> { message("评论已保存。\n评论编号：" + saved.commentId()); refresh.run(); });
     }
 
@@ -364,7 +340,7 @@ public final class MallDesktop extends JFrame {
         JTextArea output = textArea("", 18, 55);
         page.add(new JScrollPane(output), BorderLayout.CENTER);
         JPanel actions = row();
-        actions.add(button("近7天热门排行", () -> task("正在统计热门商品", () -> services.statistics.hotItemsFor(currentUser), report -> {
+        actions.add(button("近7天热门排行", () -> task("正在统计热门商品", () -> api.hotItems(), report -> {
             StringBuilder result = new StringBuilder("近7天商品浏览排行\n").append(time(report.fromInclusive())).append(" 至 ")
                     .append(time(report.throughInclusive())).append("\n\n");
             int rank = 0;
@@ -376,7 +352,7 @@ public final class MallDesktop extends JFrame {
             if (report.items().isEmpty()) result.append("此时间段没有浏览记录。");
             output.setText(result.toString()); output.setCaretPosition(0);
         })));
-        actions.add(button("我的近7天活动", () -> task("正在统计本人活动", () -> services.statistics.myActivityFor(currentUser), report -> {
+        actions.add(button("我的近7天活动", () -> task("正在统计本人活动", () -> api.myActivity(), report -> {
             var s = report.summary();
             output.setText("我的近7天活动\n" + time(report.fromInclusive()) + " 至 " + time(report.throughInclusive())
                     + "\n\n浏览次数：" + s.viewCount() + "\n不同商品：" + s.distinctItemCount()
@@ -384,12 +360,12 @@ public final class MallDesktop extends JFrame {
                     + "天（北京时间）\n最近浏览：" + time(s.lastViewedAt()));
             output.setCaretPosition(0);
         })));
-        actions.add(button("商品评论统计", () -> task("正在读取商品", () -> services.comments.availableItemsFor(currentUser), items -> {
+        actions.add(button("商品评论统计", () -> task("正在读取商品", () -> api.items(), items -> {
             JComboBox<ItemChoice> choice = choices(items, "统计商品");
             if (items.isEmpty()) { message("当前没有可统计商品。"); return; }
             if (JOptionPane.showConfirmDialog(this, choice, "选择统计商品", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
             ItemView item = ((ItemChoice) choice.getSelectedItem()).item;
-            task("正在聚合全部评论", () -> services.statistics.commentStatsFor(currentUser, item.itemId()), s -> {
+            task("正在聚合全部评论", () -> api.commentStatistics(item.itemId()), s -> {
                 StringBuilder result = new StringBuilder(item.title()).append(" / 全部评论\n\n评论条数：").append(s.commentCount())
                         .append("\n平均评分：").append(s.averageRating() == null ? "暂无" : String.format("%.2f/5", s.averageRating())).append("\n\n");
                 for (int n = 0; n < 5; n++) result.append(n+1).append("分：").append(s.ratingCounts().get(n)).append("条\n");
@@ -402,7 +378,7 @@ public final class MallDesktop extends JFrame {
     }
 
     private void showAccount() {
-        task("正在读取本人账号", () -> services.accounts.viewMyAccount(currentUser), account -> {
+        task("正在读取本人账号", () -> api.account(), account -> {
             JPanel page = page("我的账号", "管理本人的账号信息与订单概览");
             JTextArea output = textArea("用户编号：" + account.userId() + "\n用户名：" + account.username()
                     + "\n邮箱：" + account.email() + "\n联系电话：" + optional(account.phone()) + "\n角色：" + account.role()
@@ -413,10 +389,10 @@ public final class MallDesktop extends JFrame {
             actions.add(button("修改联系电话", () -> {
                 String phone = JOptionPane.showInputDialog(this, "新的电话（最多20字符，留空清除）", account.phone());
                 if (phone == null) return;
-                task("正在保存联系电话", () -> services.accounts.changeMyPhone(currentUser, phone),
+                task("正在保存联系电话", () -> api.changePhone(phone),
                         changed -> { message(changed.changed() ? "联系电话已保存。" : "联系电话没有变化。"); showAccount(); });
             }));
-            actions.add(button("资料与订单概览", () -> task("正在读取两个MySQL视图", () -> services.overviews.viewMine(currentUser), s -> {
+            actions.add(button("资料与订单概览", () -> task("正在读取两个MySQL视图", () -> api.overview(), s -> {
                 output.setText("用户：" + s.username() + "\n姓名：" + optional(s.realName()) + "\n地址：" + optional(s.address())
                         + "\n\n订单总数：" + s.orderCount() + "\n待处理：" + s.pendingCount() + "\n已完成：" + s.completedCount()
                         + "\n已取消：" + s.cancelledCount() + "\n已完成金额：" + money(s.completedAmount()) + "元");
@@ -427,11 +403,14 @@ public final class MallDesktop extends JFrame {
         });
     }
 
-    private Services ensureServices(char[] enteredPassword) {
-        if (services == null) {
-            services = Services.open(hasEnvironmentPassword() ? DatabaseConfig.load() : DatabaseConfig.loadWithPassword(enteredPassword));
-        }
-        return services;
+    private void logout() {
+        task("正在退出登录", () -> {
+            try { api.logout(); return true; }
+            catch (ApiException failure) { return false; }
+        }, confirmed -> {
+            showLogin();
+            if (!confirmed) message("本窗口的登录凭证已清除。后端暂不可达，服务器会话将在到期或后端关闭后失效。");
+        });
     }
 
     private <T> void task(String description, Callable<T> action, Consumer<T> onSuccess) {
@@ -475,18 +454,21 @@ public final class MallDesktop extends JFrame {
 
     private void closeWindow() {
         if (busy) { message("当前操作正在处理，请等待结果后再关闭窗口。"); return; }
-        if (services == null) { dispose(); return; }
-        task("正在关闭数据库连接", () -> { services.close(); return true; }, ignored -> dispose());
+        task("正在关闭商城窗口", () -> {
+            try { api.logout(); } catch (ApiException ignored) { /* 后端不可达时也允许关闭窗口。 */ }
+            return true;
+        }, ignored -> dispose());
     }
 
     private void showFailure(Throwable failure) {
         String code, text;
         if (failure instanceof MallBusinessException problem) { code = problem.code(); text = problem.getMessage(); }
-        else if (failure instanceof MallDataAccessException problem) { code = problem.code(); text = problem.getMessage(); }
-        else { code = "DESKTOP_OPERATION_FAILED"; text = "操作未完成，请检查数据库服务与配置，再查看结果后决定是否重试。"; }
+        else if (failure instanceof ApiException problem) { code = problem.code(); text = problem.getMessage(); }
+        else { code = "DESKTOP_OPERATION_FAILED"; text = "操作未完成，请检查商城后端，再查看结果后决定是否重试。"; }
         LOG.warn("桌面操作未完成，错误代码={}，类型={}", code, failure.getClass().getName());
         status.setText("[" + code + "] " + text);
         JOptionPane.showMessageDialog(this, "[" + code + "]\n" + text, "操作未完成", JOptionPane.WARNING_MESSAGE);
+        if (failure instanceof ApiException problem && problem.status() == 401) showLogin();
     }
 
     private void display(JPanel panel) { workspace.removeAll(); workspace.add(panel); refreshLayout(); }
@@ -494,7 +476,6 @@ public final class MallDesktop extends JFrame {
     private void installStatus() { status.setBorder(new EmptyBorder(11, 28, 12, 28)); body.add(status, BorderLayout.SOUTH); }
     private void message(String text) { JOptionPane.showMessageDialog(this, text, "运动装备商城", JOptionPane.INFORMATION_MESSAGE); }
     private boolean confirm(String text) { return JOptionPane.showConfirmDialog(this, text, "确认操作", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION; }
-    private static boolean hasEnvironmentPassword() { String value = System.getenv("MALL_DB_PASSWORD"); return value != null && !value.isEmpty(); }
     private static String optional(String value) { return value == null || value.isBlank() ? "未填写" : value; }
     private static String money(BigDecimal value) { return value.setScale(2).toPlainString(); }
     private static String time(Instant instant) { return instant == null ? "暂无" : TIME.format(instant.atZone(ZONE)); }
@@ -574,39 +555,4 @@ public final class MallDesktop extends JFrame {
         return named(new JComboBox<>(items.stream().map(ItemChoice::new).toArray(ItemChoice[]::new)), name);
     }
 
-    private static final class Services implements AutoCloseable {
-        private final HikariDataSource sql;
-        private final MongoClient mongo;
-        private final UserRegistrationService registration;
-        private final UserLoginService login;
-        private final UserAccountService accounts;
-        private final OrderService orders;
-        private final CommentService comments;
-        private final StatisticsService statistics;
-        private final BrowsingService browsing;
-        private final AccountOverviewService overviews;
-
-        private Services(HikariDataSource sql, MongoClient mongo, MongoDatabase database) {
-            this.sql = sql; this.mongo = mongo;
-            UserDao users = new UserDao(sql); ItemDao items = new ItemDao(sql);
-            CommentDao commentDao = new CommentDao(database); ActionLogDao actions = new ActionLogDao(database);
-            registration = new UserRegistrationService(users);
-            login = new UserLoginService(users, new SystemLogDao(database));
-            accounts = new UserAccountService(users); orders = new OrderService(accounts, new OrderDao(sql));
-            comments = new CommentService(accounts, items, commentDao);
-            statistics = new StatisticsService(accounts, items, commentDao, actions);
-            browsing = BrowsingService.forDesktop(accounts, items, new ItemDetailDao(database), actions);
-            overviews = new AccountOverviewService(accounts, new AccountOverviewDao(sql));
-        }
-        static Services open(DatabaseConfig config) {
-            HikariDataSource sql = config.openDataSource();
-            try {
-                MongoConfig mongoConfig = MongoConfig.load();
-                MongoClient mongo = mongoConfig.openClient();
-                try { return new Services(sql, mongo, mongo.getDatabase(mongoConfig.database())); }
-                catch (RuntimeException | Error failure) { mongo.close(); throw failure; }
-            } catch (RuntimeException | Error failure) { sql.close(); throw failure; }
-        }
-        @Override public void close() { try { mongo.close(); } finally { sql.close(); } }
-    }
 }
