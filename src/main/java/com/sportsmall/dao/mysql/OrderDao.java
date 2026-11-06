@@ -5,6 +5,7 @@ import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.OrderFilter;
 import com.sportsmall.model.OrderableItem;
 import com.sportsmall.model.OrderView;
+import com.sportsmall.model.MonthlyOrderReport;
 import com.sportsmall.util.JdbcTransactions;
 
 import javax.sql.DataSource;
@@ -20,6 +21,7 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.time.LocalDate;
 
 /** MySQL订单读写；创建时所有判断、取价和插入使用同一个事务连接。 */
 public final class OrderDao {
@@ -159,6 +161,40 @@ public final class OrderDao {
             }
         } catch (SQLException exception) {
             throw new MallDataAccessException("ORDER_QUERY_FAILED", "无法读取我的订单，请检查MySQL连接与订单相关表。");
+        }
+    }
+
+    public MonthlyOrderReport monthlyReport(long userId, LocalDate monthStart) {
+        try (Connection connection = dataSource.getConnection();
+             CallableStatement statement = connection.prepareCall("{call sp_monthly_order_report(?, ?)}")) {
+            statement.setLong(1, userId);
+            statement.setDate(2, java.sql.Date.valueOf(monthStart));
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) {
+                    throw new MallDataAccessException("MONTHLY_REPORT_DATA_INVALID", "月报过程没有返回汇总行，请检查过程定义。");
+                }
+                java.sql.Date returnedMonth = rows.getDate("month_start");
+                if (returnedMonth == null) {
+                    throw new MallDataAccessException("MONTHLY_REPORT_DATA_INVALID", "月报过程没有返回有效月份，请检查过程定义。");
+                }
+                MonthlyOrderReport report = new MonthlyOrderReport(rows.getLong("user_id"),
+                        returnedMonth.toLocalDate(), rows.getLong("order_count"),
+                        rows.getLong("pending_count"), rows.getLong("completed_count"),
+                        rows.getLong("cancelled_count"), rows.getBigDecimal("completed_amount"));
+                if (rows.next()) {
+                    throw new MallDataAccessException("MONTHLY_REPORT_DATA_INVALID", "月报过程返回了多行汇总，请检查过程定义。");
+                }
+                return report;
+            }
+        } catch (SQLException failure) {
+            if (failure.getErrorCode() == 1305) {
+                throw new MallDataAccessException("MONTHLY_REPORT_ROUTINE_NOT_FOUND",
+                        "请先在sports_mall执行mysql_procedures.sql，安装sp_monthly_order_report。");
+            }
+            if ("45000".equals(failure.getSQLState())) {
+                throw new MallBusinessException("MONTHLY_REPORT_REJECTED", "数据库拒绝了月报请求，请核对月份与账号状态。");
+            }
+            throw new MallDataAccessException("MONTHLY_REPORT_QUERY_FAILED", "月报查询未完成，请检查MySQL连接与存储过程定义。");
         }
     }
 

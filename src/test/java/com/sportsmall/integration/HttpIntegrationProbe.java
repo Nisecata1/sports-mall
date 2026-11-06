@@ -112,6 +112,7 @@ public final class HttpIntegrationProbe {
                 String output=new String(process.getInputStream().readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
                 check(process.waitFor()==0 && output.contains("CLIENT_PROCESS_PASSED"),"separate client JVM works without database password or drivers");
                 other.logout();
+                checks += MonthlyOrderIntegrationChecks.run(address, sql);
             }
         }
         System.out.println("INTEGRATION_CHECKS_PASSED="+checks);

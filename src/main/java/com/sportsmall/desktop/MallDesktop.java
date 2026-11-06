@@ -336,7 +336,7 @@ public final class MallDesktop extends JFrame {
     }
 
     private void showStatistics() {
-        JPanel page = page("数据统计", "三类统计直接读取数据库中的实际记录");
+        JPanel page = page("数据统计", "查询商品、浏览活动与本人月度订单统计");
         JTextArea output = textArea("", 18, 55);
         page.add(new JScrollPane(output), BorderLayout.CENTER);
         JPanel actions = row();
@@ -372,9 +372,27 @@ public final class MallDesktop extends JFrame {
                 output.setText(result.toString()); output.setCaretPosition(0);
             });
         })));
+        actions.add(button("我的月度订单", () -> showMonthlyOrders(output)));
         ((JPanel) page.getComponent(0)).add(actions);
-        output.setText("请选择一种统计。\n\n统计结果来自 MongoDB 聚合，商品名称关联 MySQL。\n近7天为滚动7×24小时，活跃日期按北京时间去重。");
+        output.setText("请选择一种统计。\n\n热门排行、本人活动和评论统计由MongoDB聚合。\n月度订单由MySQL存储过程汇总本人订单。\n近7天为滚动7×24小时，活跃日期按北京时间去重。");
         display(page);
+    }
+
+    private void showMonthlyOrders(JTextArea output) {
+        String currentMonth = java.time.YearMonth.now(ZONE).toString();
+        String month = JOptionPane.showInputDialog(this, "查询月份（YYYY-MM）", currentMonth);
+        if (month == null) return;
+        task("正在读取本人月度订单报表", () -> api.monthlyOrders(month.strip()), report -> {
+            output.setText("我的月度订单报表\n月份 " + report.monthStart().toString().substring(0, 7)
+                    + "\n\n订单总数 " + report.orderCount()
+                    + "\n待处理 " + report.pendingCount()
+                    + "\n已完成 " + report.completedCount()
+                    + "\n已取消 " + report.cancelledCount()
+                    + "\n已完成金额 " + money(report.completedAmount()) + " 元"
+                    + "\n\n按订单创建月份筛选，按查询时的当前状态统计。"
+                    + "\n金额合计该月创建且当前已完成的订单历史金额。");
+            output.setCaretPosition(0);
+        });
     }
 
     private void showAccount() {

@@ -46,6 +46,10 @@ public final class MallApiClient {
     public List<ItemView> items() { return request("GET", "/api/items", null, new TypeToken<List<ItemView>>(){}.getType()); }
     public UserAccount account() { return request("GET", "/api/me", null, UserAccount.class); }
     public AccountOverview overview() { return request("GET", "/api/me/overview", null, AccountOverview.class); }
+    public MonthlyOrderReport monthlyOrders(String month) {
+        String encodedMonth = java.net.URLEncoder.encode(month, java.nio.charset.StandardCharsets.UTF_8);
+        return request("GET", "/api/me/orders/monthly?month=" + encodedMonth, null, MonthlyOrderReport.class);
+    }
     public ApiDtos.PhoneChange changePhone(String phone) { return request("PATCH", "/api/me/phone", Map.of("phone", phone), ApiDtos.PhoneChange.class); }
     public OrderView createOrder(long itemId, BigDecimal price) {
         return request("POST", "/api/orders", Map.of("itemId", itemId, "quotedPrice", price), OrderView.class);

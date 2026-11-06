@@ -44,6 +44,10 @@ public final class MallApiServer implements AutoCloseable {
             respond(exchange, 400, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
         } catch (MallDataAccessException problem) {
             LOG.warn("接口数据操作未完成，代码={}", problem.code());
+            if (problem.code().startsWith("MONTHLY_REPORT_")) {
+                respond(exchange, 503, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
+                return;
+            }
             // 保留业务操作的不确定性提示，连接层细节只留在后端。
             respond(exchange, 503, new ApiDtos.ErrorResponse(problem.code(),
                     "后端数据操作未完成；写入操作请先查询实际结果，再决定是否重试。"));
@@ -58,7 +62,7 @@ public final class MallApiServer implements AutoCloseable {
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.2.0", "status", "UP");
+            return Map.of("application", "sports-mall", "version", "0.2.1", "status", "UP");
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");
@@ -94,6 +98,10 @@ public final class MallApiServer implements AutoCloseable {
         }
         if (path.equals("/api/me/overview")) {
             requireMethod(method, "GET"); return services.overviews.viewMine(user);
+        }
+        if (path.equals("/api/me/orders/monthly")) {
+            requireMethod(method, "GET");
+            return services.monthlyOrders.viewMine(user, query(exchange, "month").get("month"));
         }
         if (path.equals("/api/items")) {
             requireMethod(method, "GET"); return services.browsing.availableFor(user);
