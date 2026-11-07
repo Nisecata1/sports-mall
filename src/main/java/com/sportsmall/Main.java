@@ -46,10 +46,10 @@ public final class Main {
             MallDesktop.open();
             exitCode = 0;
         } else {
-            System.out.println("运行商城：java -jar .\\target\\sports-mall-0.1.0.jar");
-            System.out.println("注册账号：java -jar .\\target\\sports-mall-0.1.0.jar register");
-            System.out.println("登录账号：java -jar .\\target\\sports-mall-0.1.0.jar login");
-            System.out.println("窗口界面：java -jar .\\target\\sports-mall-0.1.0.jar gui");
+            System.out.println("商城窗口：双击 Start-Mall.vbs");
+            System.out.println("业务后端：在 PowerShell 7 运行 .\\Start-Backend.ps1");
+            System.out.println("历史注册入口：java -cp .\\target\\sports-mall-0.2.3.jar com.sportsmall.Main register");
+            System.out.println("历史登录入口：java -cp .\\target\\sports-mall-0.2.3.jar com.sportsmall.Main login");
             exitCode = args.length == 1 && ("help".equals(args[0]) || "--help".equals(args[0])) ? 0 : 1;
         }
         if (exitCode != 0) {

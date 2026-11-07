@@ -27,7 +27,7 @@ public final class RegisterCommand {
             Console console = System.console();
             if (console == null) {
                 throw new MallBusinessException("INTERACTIVE_CONSOLE_REQUIRED",
-                        "注册需要可隐藏密码的交互终端，请在 PowerShell 中直接运行 java -jar .\\target\\sports-mall-0.1.0.jar register。");
+                        "请双击 Start-Mall.vbs 使用商城注册；历史命令行入口需要可隐藏密码的交互终端。");
             }
             DatabaseConfig config = DatabaseConfig.load();
             console.printf("商城用户注册：创建普通用户账号。%n");

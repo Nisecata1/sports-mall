@@ -43,7 +43,7 @@ public final class LoginCommand {
             Console console = System.console();
             if (console == null) {
                 throw new MallBusinessException("INTERACTIVE_CONSOLE_REQUIRED",
-                        "登录需要可隐藏密码的交互终端，请在PowerShell中直接运行 java -jar .\\target\\sports-mall-0.1.0.jar login。");
+                        "请双击 Start-Mall.vbs 使用商城登录；历史命令行入口需要可隐藏密码的交互终端。");
             }
             DatabaseConfig databaseConfig = DatabaseConfig.load();
             MongoConfig mongoConfig = MongoConfig.load();

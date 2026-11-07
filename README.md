@@ -2,7 +2,7 @@
 
 以老师下发的《项目011_运动装备商城.docx》为验收依据；原件在工程上一级目录。本工程是正式大作业，沿用既有数据库，不重新初始化或导入覆盖用户数据。
 
-当前版本为 **0.2.2，2026-11-06**。窗口和后端分别运行，通过本机 HTTP 接口通信。普通商城用户输入商城账号密码，启动后端时提供 MySQL 连接密码。本版增加本人档案创建、读取、修改和删除。
+当前版本为 **0.2.3，2026-11-07**。窗口和后端分别运行，通过本机 HTTP 接口通信。普通商城用户输入商城账号密码，启动后端时提供 MySQL 连接密码。本版统一请求日志、启动入口、源码与正式文档，沿用已实现的本人档案功能。
 
 仓库：[Gitee](https://gitee.com/Nisegitee/sports-mall) · [GitHub](https://github.com/Nisecata1/sports-mall)。每次提交后同步两个仓库，保留真实日期。
 
@@ -62,8 +62,8 @@ MySQL：127.0.0.1:18306 / sports_mall；MongoDB：127.0.0.1:27017 / sports_mall�
 
 | 文件 | 用途 |
 | --- | --- |
-| target/sports-mall-0.2.2.jar | 独立后端，包含业务层、DAO 和数据库依赖 |
-| target/sports-mall-0.2.2-desktop.jar | 独立商城窗口，只通过 HTTP 访问后端 |
+| target/sports-mall-0.2.3.jar | 独立后端，包含业务层、DAO 和数据库依赖 |
+| target/sports-mall-0.2.3-desktop.jar | 独立商城窗口，只通过 HTTP 访问后端 |
 
 **原理与位置：**Maven 编译同一源码工程并产生两种运行包。它们可以在同一台电脑分别启动；前后端分离不要求两个 Git 仓库。构建不导入 SQL、不改数据库。以后重新构建前退出运行中的新版窗口并停止新版后端，避免 JAR 占用。
 
@@ -75,7 +75,7 @@ MySQL：127.0.0.1:18306 / sports_mall；MongoDB：127.0.0.1:27017 / sports_mall�
 .\Start-Backend.ps1
 ```
 
-按提示输入 MySQL 连接密码。看到“商城后端已启动：http://127.0.0.1:18808”后保持此窗口运行。
+按提示输入 MySQL 连接密码。看到“商城后端已启动，地址 http://127.0.0.1:18808”后保持此窗口运行。
 
 **原理与位置：**这一步启动独立业务后端，并建立数据库连接池及共享 MongoClient。连接密码只提供给这个进程，不保存到源码、脚本或永久环境变量。普通商城登录不会再次要求此密码。脚本不会自动安装数据库或系统服务。
 
@@ -86,7 +86,7 @@ MySQL：127.0.0.1:18306 / sports_mall；MongoDB：127.0.0.1:27017 / sports_mall�
 先关闭原来运行的旧版商城窗口，再双击 **Start-Mall.vbs**。终端等效命令：
 
 ```powershell
-java -jar .\target\sports-mall-0.2.2-desktop.jar
+java -jar .\target\sports-mall-0.2.3-desktop.jar
 ```
 
 只输入已注册的商城用户名、商城密码。窗口包含商品浏览、我的订单、商品评论、数据统计、我的账号。
@@ -99,7 +99,7 @@ java -jar .\target\sports-mall-0.2.2-desktop.jar
 
 进入“我的账号”→“资料与订单概览”，查看当前已有账号、订单状态与金额；这个操作只读数据。现有历史示例为订单总数1、已取消1、已完成金额0.00，后续实际操作会使结果变化。
 
-这个操作串起窗口、HTTP、会话、Service、DAO和MySQL视图。2026-11-06用户已经完成主库概览及0.2.1月报查询，窗口显示10月订单总数1、已取消1、已完成金额0.00元。本版新增档案维护按第8步继续验收。
+这个操作串起窗口、HTTP、会话、Service、DAO和MySQL视图。2026-11-06用户已经完成主库概览及0.2.1月报查询，窗口显示10月订单总数1、已取消1、已完成金额0.00元。档案保存、数据库关联查询与窗口概览读回也已由用户确认，第8步用于理解实现链路。
 
 ### 6. 结束使用
 
@@ -132,7 +132,7 @@ CALL sports_mall.sp_monthly_order_report(1, '2026-10-01');
 
 users保存账号信息，profiles保存姓名、证件号码、地址和备注。profiles.profile_id是档案自己的主键，profiles.user_id是引用users的外键，并有唯一约束。一位用户可以先注册账号，填写资料后再建立一份档案。
 
-1. 启动0.2.2后端与窗口，登录原有商城账号，进入“我的账号”。页面同时读取账号与本人档案。
+1. 启动当前版本后端与窗口，登录原有商城账号，进入“我的账号”。页面同时读取账号与本人档案。
 2. 点击“编辑我的档案”，填写演示姓名和演示地址，确认保存。首次保存会在profiles新增记录，并显示生成的档案编号。
 3. 再次编辑，把地址改为另一段文字并保存。已有档案会按唯一user_id更新。表单的四个字段一起提交，留空字段保存为SQL NULL。
 4. 点击“资料与订单概览”，观察姓名和地址。概览读取v_user_details与订单汇总视图，姓名和地址来自profiles。
@@ -187,16 +187,16 @@ WHERE u.username = 'mall_user01';
 
 ## 当前验证证据
 
-2026-11-06：
+2026-11-07 当前源码重新构建与验证通过。
 
-- 本次档案功能独立提交的210项JUnit通过，0失败、0错误。
-- 89项真实HTTP/临时MySQL8.4.13/MongoDB8.0.34检查通过，新增32项档案CRUD、唯一/外键、并发首次保存、Unicode、字段清空、用户范围和失败处理检查。
+- 213项JUnit通过，0失败、0错误，包含3项HTTP请求日志检查。此前档案功能独立提交的210项为2026-11-06历史结果。
+- 当前0.2.3重新通过89项真实HTTP/临时MySQL8.4.13/MongoDB8.0.34检查，覆盖原有38项、19项月报和32项档案检查，测试实例已退出并清理。
 - 已实际查看档案表单、首次保存后的显示与再次编辑的预填，另完成1项实际窗口修改、回读和视图核对检查。
 - 已实际点击隔离窗口的月报入口、输入2026-10并查询，窗口显示1笔已取消订单、已完成金额0.00元，1项窗口操作检查通过。
 - 独立客户端子进程在没有数据库密码和驱动时，通过真实HTTP读取商品与本人概览。
 - 前端JAR扫描确认没有数据库驱动、后端Service/DAO或数据库配置。
 - 隔离探针源码见 src/test/java/com/sportsmall/integration；运行前验证临时数据目录，拒绝课程主端口18306/27017，运行后临时实例已停止并清理。
-- 0.2.0主库窗口登录与概览、0.2.1主库月报均已有用户手操结果。0.2.2档案维护的主库手操待用户确认。
+- 用户已确认主库登录、概览、月报、档案保存及users/profiles关联读回。主库档案二次修改与删除的操作结果仍按用户实际反馈记录。
 
 ## 工程与课程交付
 
@@ -217,7 +217,7 @@ WHERE u.username = 'mall_user01';
 
 现有 Main/cli 代码保留早期学习过程的入口，但新版产品启动以本页的两个程序为准。历史实现和操作记录可通过Git查看，不再按旧版本命令启动。
 
-本地 docs/需求对照与进度.md、需求规格说明书.md、历史素材为过程材料，不计入本次提交。依照课程交付清单选择成品，不添加提交说明或额外压缩包。
+docs中的需求对照、文档Markdown源稿和历史素材随本次更新纳入Git。PDF为课程交付格式，Markdown用于持续维护，历史素材保留早期记录。正式验收以当前进度表和PDF为准，提交清单见docs/需求对照与进度.md。
 
 ## 提交到两个仓库
 
@@ -229,3 +229,29 @@ git push github main
 使用当前真实日期和明确的功能提交说明，不补造过去的每日提交。
 
 技术参考：[JDK HttpServer](https://docs.oracle.com/en/java/javase/17/docs/api/jdk.httpserver/com/sun/net/httpserver/HttpServer.html)、[JDK HttpClient](https://docs.oracle.com/en/java/javase/17/docs/api/java.net.http/java/net/http/HttpClient.html)、[Gson](https://github.com/google/gson)。HTTP服务与客户端使用JDK17内置API，未改为ORM，保留课程要求的JDBC、DAO和手动事务。
+
+
+## 从源码追踪一次档案保存
+
+本段用于边做正式项目边理解各层。先打开代码，再执行操作并核对结果。
+
+| 顺序 | 打开的文件与入口 | 本层目的 |
+| --- | --- | --- |
+| 1 | desktop/MallDesktop.java，editProfile | 从表单读取姓名、证件、地址和备注 |
+| 2 | client/MallApiClient.java，saveProfile | 将四个字段编码为JSON，发送PUT /api/me/profile |
+| 3 | server/MallApiServer.java，/api/me/profile分支 | 校验会话，从服务端身份取得用户编号 |
+| 4 | service/ProfileService.java，saveMine | 校验账号与长度，整理可选空字段 |
+| 5 | dao/mysql/ProfileDao.java，save | 绑定SQL参数，在事务中新增或更新并读回 |
+| 6 | util/JdbcTransactions.java，execute | 控制本次数据库操作的提交与回滚 |
+| 7 | MySQL profiles及v_user_details | 保存档案，并为资料概览提供关联查询 |
+| 8 | 桌面刷新账号页面 | 将后端返回和再次查询的数据呈现出来 |
+
+Java目录均位于src/main/java/com/sportsmall下。保存请求含realName、idCard、address、notes，后端身份来自登录会话。ProfileDao使用INSERT ... ON DUPLICATE KEY UPDATE，已有user_id时更新同一份档案。表结构继续使用既有profiles定义。
+
+启动新版后端和窗口，登录并打开“我的账号”，后端会显示GET /api/me/profile。点击“编辑我的档案”，可保留已有内容保存一次，后端会显示PUT请求及HTTP状态、耗时，再用第8步的SELECT核对记录。读取与保存可能同时伴随GET /api/me等账号刷新请求。
+
+HTTP请求日志输出在后端终端，显示固定接口名称、请求编号、状态和耗时。它们由RequestLoggingFilter产生。MongoDB system_logs继续保存已有登录业务日志，两种记录各有用途。
+
+## 后续开发顺序
+
+下一功能阶段先实现服务端管理员权限，再接分类维护。权限决定谁能调用维护接口，分类是商品的外键基础。每个功能先说明课程需求、预期数据变化、待改文件与调用顺序，再实现并同时核对接口和数据库结果。

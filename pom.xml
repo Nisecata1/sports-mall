@@ -4,9 +4,9 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.sportsmall</groupId>
     <artifactId>sports-mall</artifactId>
-    <version>0.2.2</version>
+    <version>0.2.3</version>
     <name>项目011 · 运动装备商城</name>
-    <description>运动装备商城正式工程；首版入口从既有数据库读取商品。</description>
+    <description>运动装备商城正式工程，包含独立桌面客户端、HTTP后端和MySQL/MongoDB数据访问。</description>
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

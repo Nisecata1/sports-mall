@@ -29,7 +29,7 @@ public final class MallApiServer implements AutoCloseable {
         executor = new ThreadPoolExecutor(4, 8, 30, TimeUnit.SECONDS,
                 new ArrayBlockingQueue<>(64), new ThreadPoolExecutor.CallerRunsPolicy());
         server.setExecutor(executor);
-        server.createContext("/", this::handle);
+        server.createContext("/", this::handle).getFilters().add(new RequestLoggingFilter());
     }
     public void start() { server.start(); }
     public int port() { return server.getAddress().getPort(); }
@@ -62,7 +62,7 @@ public final class MallApiServer implements AutoCloseable {
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.2.2", "status", "UP");
+            return Map.of("application", "sports-mall", "version", "0.2.3", "status", "UP");
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");

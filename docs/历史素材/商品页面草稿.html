@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>商品工作台 · 运动装备商城</title>
+  <style>
+    :root{--bg:#f5f7f3;--surface:#fff;--ink:#1b3027;--muted:#65766c;--line:#dce4dc;--accent:#236544;--accent-dark:#18492f;--soft:#eaf2e9;--error:#9d382c;--error-bg:#fff0ed;--radius:8px}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-size:15px;line-height:1.65}button,input,select{font:inherit}button,a,input,select{-webkit-tap-highlight-color:transparent}button{cursor:pointer}button:disabled{cursor:wait;opacity:.52}input:disabled,select:disabled{background:#f1f3ef;color:var(--muted)}button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #8eb99d;outline-offset:3px}button,input,select{min-height:44px}button{transition:background .16s ease,transform .16s ease}button:not(:disabled):active{transform:translateY(1px)}
+    .shell{max-width:1320px;margin:0 auto;padding:0 48px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:24px;min-height:96px;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:13px}.brand-mark{width:35px;height:35px;display:grid;place-items:center;background:var(--accent);color:white;font-size:18px;font-weight:700;border-radius:50%}.brand-name{font-size:21px;font-weight:700;letter-spacing:-.04em}.brand-sub{margin-left:16px;padding-left:16px;border-left:1px solid var(--line);color:var(--muted);font-size:13px}.connection{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);text-align:right}.dot{height:7px;width:7px;flex:none;border-radius:50%;background:#94a49a}.connection[data-state="ok"] .dot{background:var(--accent)}.connection[data-state="error"] .dot{background:var(--error)}
+    .intro{padding:42px 0 32px;display:flex;justify-content:space-between;align-items:end;gap:24px}.eyebrow{margin:0 0 7px;font-size:12px;letter-spacing:.12em;color:var(--muted)}h1{font-size:34px;letter-spacing:-.04em;margin:0;line-height:1.3;font-weight:650}.task{margin:12px 0 0;color:var(--muted);font-size:14px}.task strong{color:var(--accent);font-weight:600}.refresh{border:1px solid var(--line);background:transparent;color:var(--ink);padding:9px 16px;border-radius:var(--radius);white-space:nowrap}.refresh:hover:not(:disabled){background:var(--soft)}
+    .workspace{display:grid;grid-template-columns:300px minmax(0,1fr);gap:46px;background:var(--surface);border-top:3px solid var(--accent);padding:32px;margin-bottom:32px}.entry{padding-right:32px;border-right:1px solid var(--line)}h2{font-size:19px;line-height:1.4;margin:0;font-weight:650;letter-spacing:-.02em}.section-note{color:var(--muted);font-size:12px;margin:6px 0 24px}.field{margin-bottom:22px}.field-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}label{font-weight:600;font-size:13px}.counter{color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}input,select{width:100%;border:1px solid #cbd6cc;border-radius:6px;padding:10px 12px;background:#fff;color:var(--ink);transition:border-color .16s ease}input::placeholder{color:#87958c}input:hover,select:hover{border-color:#97b19d}.primary{width:100%;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:6px;padding:11px 16px;font-weight:600}.primary:hover:not(:disabled){background:var(--accent-dark)}.form-hint{font-size:12px;color:var(--muted);margin:13px 0 0}.message{margin-top:18px;font-size:13px;padding:12px 13px;line-height:1.7;border-left:3px solid var(--accent);background:var(--soft);overflow-wrap:anywhere}.message[data-type="error"]{color:var(--error);border-color:var(--error);background:var(--error-bg)}.retry-inline{background:transparent;border:0;border-bottom:1px solid currentColor;min-height:32px;padding:0;color:inherit;margin-top:8px;font-size:12px}.catalog{min-width:0}.list-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:22px}.count{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}.filters{display:grid;grid-template-columns:1fr 150px auto;gap:10px;align-items:end;margin-bottom:24px}.filters label{display:block;margin-bottom:7px;font-size:12px;font-weight:500;color:var(--muted)}.search-button{padding:10px 19px;color:var(--accent);background:var(--soft);border:1px solid var(--soft);border-radius:6px;font-weight:600}.search-button:hover:not(:disabled){background:#dcebdc}.list-region{position:relative;min-height:290px}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}thead{background:#f5f7f3}th{font-size:11px;color:var(--muted);font-weight:500;padding:12px 14px;white-space:nowrap}td{padding:18px 14px;border-bottom:1px solid #e9eee8;vertical-align:top}th:first-child,td:first-child{padding-left:12px;width:65px}.id-cell{font-variant-numeric:tabular-nums;color:var(--muted)}.item-name{font-size:14px;color:var(--ink);font-weight:600;overflow-wrap:anywhere;max-width:280px}.category-cell{white-space:nowrap;color:var(--muted)}.time-cell{white-space:nowrap;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}tbody tr{transition:background .2s ease}tbody tr:hover{background:#f8faf6}tbody tr.saved-row{background:#eff6ed;animation:record-in .5s ease}.empty-state{padding:66px 18px;text-align:center;color:var(--muted);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.empty-state strong{display:block;color:var(--ink);font-size:16px;font-weight:600;margin-bottom:8px}.empty-state p{margin:0;font-size:13px}.empty-state[data-state="error"] strong{color:var(--error)}.list-foot{display:flex;justify-content:space-between;gap:12px;margin-top:18px;font-size:11px;color:var(--muted)}.footer{font-size:11px;color:var(--muted);padding:0 0 30px;display:flex;justify-content:space-between;gap:20px}.spinner{display:inline-block;width:12px;height:12px;border:2px solid #c6d6c8;border-top-color:var(--accent);border-radius:50%;vertical-align:-2px;margin-right:8px;animation:spin .65s linear infinite}[hidden]{display:none!important}@keyframes spin{to{transform:rotate(360deg)}}@keyframes record-in{from{background:#cfe7ca}to{background:#eff6ed}}
+    @media(max-width:1100px){.shell{padding:0 28px}.workspace{grid-template-columns:250px minmax(0,1fr);gap:28px;padding:27px}.entry{padding-right:26px}.filters{grid-template-columns:minmax(0,1fr) 125px auto}.time-col,.time-cell{display:none}}
+    @media(max-width:760px){.shell{padding:0 20px}.topbar{min-height:82px;gap:12px}.brand-name{font-size:18px}.brand-sub{display:none}.brand-mark{width:30px;height:30px;font-size:15px}.connection{font-size:10px;max-width:110px}.intro{padding:29px 0 25px;align-items:start}h1{font-size:28px}.task{font-size:12px;max-width:240px}.refresh{font-size:12px;padding:8px 12px;min-height:40px}.workspace{display:block;padding:24px 20px;margin-bottom:24px}.entry{border-right:0;border-bottom:1px solid var(--line);padding:0 0 28px;margin-bottom:28px}.section-note{margin-bottom:19px}.form-grid{display:grid;grid-template-columns:minmax(0,1fr) 130px;gap:12px}.field{margin-bottom:16px}.filters{grid-template-columns:minmax(0,1fr) 110px;gap:10px}.filters .search-button{grid-column:1 / -1;min-height:40px;padding:8px}.list-heading{margin-bottom:18px}.list-region{min-height:180px}td{padding:15px 9px}th{padding:11px 9px}.item-name{font-size:13px;max-width:none}.category-cell{font-size:12px;white-space:normal}.empty-state{padding:42px 10px}.list-foot{font-size:10px}.footer{display:block}.footer span{display:block}.counter{font-size:10px}}
+    @media(max-width:420px){.shell{padding:0 14px}.workspace{padding:21px 15px}.form-grid{display:block}.topbar{gap:9px}.brand{gap:9px}.brand-name{font-size:16px}.intro{gap:10px}h1{font-size:26px}.task{max-width:220px}.filters{grid-template-columns:minmax(0,1fr) 100px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">动</span><span class="brand-name">运动装备商城</span><span class="brand-sub">商品工作台</span></div>
+      <div id="connection" class="connection" data-state="loading" role="status"><span class="dot" aria-hidden="true"></span><span id="connectionText">正在连接…</span></div>
+    </header>
+    <main>
+      <div class="intro">
+        <div><p class="eyebrow">01 / 商品录入与查询</p><h1>从一件商品开始</h1><p class="task">这次试一试：<strong>录入一件你自己的运动商品，筛选后找到它。</strong></p></div>
+        <button type="button" class="refresh" id="refreshButton">刷新数据</button>
+      </div>
+      <div class="workspace">
+        <section class="entry" aria-labelledby="entryHeading">
+          <h2 id="entryHeading">录入商品</h2>
+          <p class="section-note">填写名称，选一个合适的分类。</p>
+          <form id="itemForm">
+            <div class="form-grid">
+              <div class="field"><div class="field-head"><label for="itemTitle">商品名称</label><span class="counter" id="titleCount">0 / 200</span></div><input id="itemTitle" name="title" type="text" placeholder="例如：室内训练篮球" required maxlength="200" autocomplete="off" aria-describedby="titleCount"></div>
+              <div class="field"><div class="field-head"><label for="itemCategory">商品分类</label></div><select id="itemCategory" name="categoryId" required disabled><option value="">正在读取分类…</option></select></div>
+            </div>
+            <button type="submit" class="primary" id="saveButton" disabled>保存商品</button>
+            <p class="form-hint">保存成功后，商品会出现在右侧列表中。</p>
+          </form>
+          <div id="saveMessage" class="message" role="status" aria-live="polite" hidden></div>
+          <button type="button" class="retry-inline" id="categoryRetry" hidden>重新读取分类</button>
+        </section>
+        <section class="catalog" aria-labelledby="catalogHeading">
+          <div class="list-heading"><h2 id="catalogHeading">商品列表</h2><span id="resultCount" class="count" aria-live="polite">正在读取</span></div>
+          <form id="filterForm" class="filters" role="search">
+            <div><label for="searchQuery">按名称查找</label><input id="searchQuery" name="q" type="search" placeholder="输入商品名称" maxlength="200" autocomplete="off"></div>
+            <div><label for="filterCategory">按分类筛选</label><select id="filterCategory" name="categoryId"><option value="">全部分类</option></select></div>
+            <button type="submit" id="searchButton" class="search-button">查询</button>
+          </form>
+          <div id="listRegion" class="list-region" aria-busy="true">
+            <div class="table-wrap" id="tableWrap" hidden>
+              <table aria-label="已保存的商品"><thead><tr><th scope="col">编号</th><th scope="col">商品名称</th><th scope="col">分类</th><th scope="col" class="time-col">录入时间</th></tr></thead><tbody id="itemRows"></tbody></table>
+            </div>
+            <div id="listState" class="empty-state" data-state="loading" role="status"><strong id="listStateTitle">正在读取商品…</strong><p id="listStateText">稍等一下。</p><button type="button" id="listRetry" class="retry-inline" hidden>重新读取商品</button></div>
+          </div>
+          <div class="list-foot"><span id="filterSummary">当前显示：全部商品</span><span id="lastUpdated">尚未刷新</span></div>
+        </section>
+      </div>
+    </main>
+    <footer class="footer"><span>运动装备商城 · 第一步</span><span>刷新或重新打开页面，可以再次查询已保存的商品。</span></footer>
+  </div>
+  <script>
+    'use strict';
+    const byId = id => document.getElementById(id);
+    const els = Object.fromEntries(['connection','connectionText','refreshButton','itemForm','itemTitle','titleCount','itemCategory','saveButton','saveMessage','categoryRetry','filterForm','searchQuery','filterCategory','searchButton','resultCount','listRegion','tableWrap','itemRows','listState','listStateTitle','listStateText','listRetry','filterSummary','lastUpdated'].map(id => [id,byId(id)]));
+    let saving = false;
+    let categoriesReady = false;
+    let categoryRequest = 0;
+    let listRequest = 0;
+    let listAbort = null;
+    let savedId = null;
+
+    async function api(path, options = {}) {
+      let response;
+      try { response = await fetch(path, {cache:'no-store', ...options}); }
+      catch (error) {
+        if (error.name === 'AbortError') throw error;
+        throw new Error('暂时连不上服务，请确认项目正在运行，再点击刷新。');
+      }
+      let data;
+      try { data = await response.json(); }
+      catch { throw new Error('服务返回了无法读取的内容，请稍后重试。'); }
+      if (!response.ok) throw new Error(data?.error?.message || '操作没有完成，请稍后重试。');
+      return data;
+    }
+    function message(text, type = 'success') {
+      els.saveMessage.textContent = text;
+      els.saveMessage.dataset.type = type;
+      els.saveMessage.hidden = false;
+    }
+    function updateSaveButton() {
+      els.saveButton.disabled = saving || !categoriesReady;
+      els.saveButton.textContent = saving ? '正在保存…' : '保存商品';
+      els.itemTitle.disabled = saving;
+      els.itemCategory.disabled = saving || !categoriesReady;
+    }
+    async function loadHealth() {
+      els.connection.dataset.state = 'loading';
+      els.connectionText.textContent = '正在连接…';
+      try {
+        const data = await api('/api/health');
+        if (data.status !== 'ok') throw new Error('服务暂时不可用');
+        els.connection.dataset.state = 'ok';
+        els.connectionText.textContent = '已连接 ' + (data.database || '数据库');
+        els.connection.title = data.databaseVersion ? '数据库版本：' + data.databaseVersion : '';
+      } catch (error) {
+        els.connection.dataset.state = 'error';
+        els.connectionText.textContent = '服务暂不可用';
+        els.connection.title = error.message;
+      }
+    }
+    function addOption(select, text, value) {
+      const option = document.createElement('option');
+      option.textContent = text;
+      option.value = String(value);
+      select.append(option);
+    }
+    async function loadCategories() {
+      const requestId = ++categoryRequest;
+      categoriesReady = false;
+      els.categoryRetry.hidden = true;
+      updateSaveButton();
+      const previousEntry = els.itemCategory.value;
+      const previousFilter = els.filterCategory.value;
+      try {
+        const data = await api('/api/categories');
+        if (requestId !== categoryRequest) return;
+        if (!Array.isArray(data.categories)) throw new Error('分类数据暂时无法读取，请重试。');
+        els.itemCategory.replaceChildren();
+        els.filterCategory.replaceChildren();
+        addOption(els.itemCategory, '请选择分类', '');
+        addOption(els.filterCategory, '全部分类', '');
+        for (const category of data.categories) {
+          addOption(els.itemCategory, category.name, category.id);
+          addOption(els.filterCategory, category.name, category.id);
+        }
+        if (data.categories.some(category => String(category.id) === previousEntry)) els.itemCategory.value = previousEntry;
+        if (data.categories.some(category => String(category.id) === previousFilter)) els.filterCategory.value = previousFilter;
+        categoriesReady = data.categories.length > 0;
+        if (!categoriesReady) {
+          message('暂时没有可选分类。请先完成项目的初始数据准备，再刷新。', 'error');
+          els.categoryRetry.hidden = false;
+        }
+      } catch (error) {
+        if (requestId !== categoryRequest) return;
+        els.itemCategory.replaceChildren();
+        addOption(els.itemCategory, '分类读取失败', '');
+        message(error.message, 'error');
+        els.categoryRetry.hidden = false;
+      } finally {
+        if (requestId === categoryRequest) updateSaveButton();
+      }
+    }
+    function setListState(state, title, text) {
+      els.listState.dataset.state = state;
+      els.listStateTitle.textContent = title;
+      els.listStateText.textContent = text;
+      els.listRetry.hidden = state !== 'error';
+      els.listState.hidden = false;
+      els.tableWrap.hidden = true;
+    }
+    function cell(text, className) {
+      const element = document.createElement('td');
+      element.textContent = text == null ? '—' : String(text);
+      if (className) element.className = className;
+      return element;
+    }
+    function renderItems(items) {
+      els.itemRows.replaceChildren();
+      if (items.length === 0) {
+        const filtered = !!(els.searchQuery.value.trim() || els.filterCategory.value);
+        setListState('empty', filtered ? '没有找到符合条件的商品' : '还没有商品', filtered ? '换个名称或分类，再查一次。' : '先录入一件你自己的运动商品。');
+        return;
+      }
+      const rows = document.createDocumentFragment();
+      for (const item of items) {
+        const row = document.createElement('tr');
+        row.dataset.itemId = String(item.id);
+        if (String(item.id) === String(savedId)) row.className = 'saved-row';
+        const date = typeof item.createdAt === 'string' ? item.createdAt.replace('T',' ').slice(0,16) : '—';
+        row.append(cell('#' + item.id,'id-cell'), cell(item.title,'item-name'), cell(item.categoryName,'category-cell'), cell(date,'time-cell'));
+        rows.append(row);
+      }
+      els.itemRows.append(rows);
+      els.listState.hidden = true;
+      els.tableWrap.hidden = false;
+    }
+    async function loadItems() {
+      const requestId = ++listRequest;
+      if (listAbort) listAbort.abort();
+      listAbort = new AbortController();
+      const query = els.searchQuery.value.trim();
+      const categoryId = els.filterCategory.value;
+      const params = new URLSearchParams();
+      if (query) params.set('q',query);
+      if (categoryId) params.set('categoryId',categoryId);
+      els.listRegion.setAttribute('aria-busy','true');
+      els.searchButton.disabled = true;
+      els.resultCount.textContent = '正在读取';
+      setListState('loading','正在读取商品…','稍等一下。');
+      const selectedCategory = els.filterCategory.selectedOptions[0]?.textContent || '全部分类';
+      els.filterSummary.textContent = '当前显示：' + (categoryId ? selectedCategory : '全部商品') + (query ? ' · 名称包含“' + query + '”' : '');
+      try {
+        const data = await api('/api/items' + (params.size ? '?' + params.toString() : ''), {signal:listAbort.signal});
+        if (requestId !== listRequest) return false;
+        if (!Array.isArray(data.items)) throw new Error('商品数据暂时无法读取，请重试。');
+        renderItems(data.items);
+        els.resultCount.textContent = data.items.length + ' 件商品';
+        els.lastUpdated.textContent = '读取于 ' + new Date().toLocaleTimeString('zh-CN',{hour12:false});
+        return true;
+      } catch (error) {
+        if (error.name === 'AbortError' || requestId !== listRequest) return false;
+        setListState('error','商品读取失败',error.message);
+        els.resultCount.textContent = '读取失败';
+        els.lastUpdated.textContent = '本次未能刷新';
+        return false;
+      } finally {
+        if (requestId === listRequest) {
+          els.listRegion.setAttribute('aria-busy','false');
+          els.searchButton.disabled = false;
+        }
+      }
+    }
+    async function refreshAll() {
+      els.refreshButton.disabled = true;
+      els.refreshButton.textContent = '正在刷新…';
+      try {
+        await Promise.all([loadHealth(), loadCategories()]);
+        await loadItems();
+      } finally {
+        els.refreshButton.disabled = false;
+        els.refreshButton.textContent = '刷新数据';
+      }
+    }
+    els.itemTitle.addEventListener('input', () => {
+      els.titleCount.textContent = els.itemTitle.value.length + ' / 200';
+      els.itemTitle.setCustomValidity('');
+    });
+    els.itemForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (saving || !categoriesReady) return;
+      const title = els.itemTitle.value.trim();
+      const categoryId = Number(els.itemCategory.value);
+      if (!title) {
+        els.itemTitle.setCustomValidity('请输入商品名称，不能只填空格。');
+        els.itemTitle.reportValidity();
+        return;
+      }
+      if (!Number.isSafeInteger(categoryId) || categoryId < 1) {
+        message('请选择商品分类。','error');
+        els.itemCategory.focus();
+        return;
+      }
+      saving = true;
+      updateSaveButton();
+      els.saveMessage.hidden = true;
+      try {
+        const data = await api('/api/items',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,categoryId})});
+        if (!data.item || data.item.id == null) throw new Error('保存响应缺少商品编号。请刷新列表确认结果，避免重复保存。');
+        savedId = data.item.id;
+        message('已保存“' + data.item.title + '”，商品编号 #' + data.item.id + '。');
+        els.itemTitle.value = '';
+        els.titleCount.textContent = '0 / 200';
+        els.searchQuery.value = '';
+        els.filterCategory.value = String(data.item.categoryId);
+        const listed = await loadItems();
+        if (!listed) message('商品 #' + data.item.id + ' 已保存，但列表未能刷新。请点击“重新读取商品”，不用再次保存。');
+      } catch (error) {
+        message(error.message,'error');
+      } finally {
+        saving = false;
+        updateSaveButton();
+        els.itemTitle.focus();
+      }
+    });
+    els.filterForm.addEventListener('submit',event => {event.preventDefault();loadItems();});
+    els.filterCategory.addEventListener('change',() => loadItems());
+    els.refreshButton.addEventListener('click',refreshAll);
+    els.categoryRetry.addEventListener('click',loadCategories);
+    els.listRetry.addEventListener('click',loadItems);
+    refreshAll();
+  </script>
+</body>
+</html>
