@@ -118,4 +118,57 @@ class CategoryServiceTest {
         return new CategoryService(current -> ACCOUNT, List::of,
                 (actor, name, parent) -> fail("Invalid input must not be saved"));
     }
+
+    @Test
+    void editUsesCurrentActorAndKeepsTargetIdentity() {
+        var service = new CategoryService(current -> ACCOUNT, List::of,
+                (actor, name, parent) -> fail("Edit is not an insert"),
+                (actor, id, name, parent) -> {
+                    assertEquals(42, actor);
+                    assertEquals(7, id);
+                    assertEquals("篮球装备", name);
+                    return new CategoryView(id, name, parent);
+                }, (actor, id) -> fail("Edit is not deletion"));
+        assertEquals(9L, service.updateFor(ADMIN, 7, " 篮球装备 ", 9L).parentId());
+        assertNull(service.updateFor(ADMIN, 7, "篮球装备", null).parentId());
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, -1})
+    void invalidEditAndDeleteTargetCannotReachDatabase(long id) {
+        assertEquals("INVALID_CATEGORY_ID", assertThrows(MallBusinessException.class,
+                () -> readOnlyService().updateFor(ADMIN, id, "有效名称", null)).code());
+        assertEquals("INVALID_CATEGORY_ID", assertThrows(MallBusinessException.class,
+                () -> readOnlyService().deleteFor(ADMIN, id)).code());
+    }
+
+    @Test
+    void invalidEditFieldsCannotReachWriter() {
+        assertEquals("INVALID_CATEGORY_NAME", assertThrows(MallBusinessException.class,
+                () -> readOnlyService().updateFor(ADMIN, 7, " ", null)).code());
+        assertEquals("INVALID_CATEGORY_PARENT", assertThrows(MallBusinessException.class,
+                () -> readOnlyService().updateFor(ADMIN, 7, "名称", -1L)).code());
+    }
+
+    @Test
+    void deleteUsesCurrentActorAndReportsActualResult() {
+        var service = new CategoryService(current -> ACCOUNT, List::of,
+                (actor, name, parent) -> fail("Delete is not insert"),
+                (actor, id, name, parent) -> fail("Delete is not edit"), (actor, id) -> {
+                    assertEquals(42, actor);
+                    assertEquals(7, id);
+                    return true;
+                });
+        assertTrue(service.deleteFor(ADMIN, 7));
+    }
+
+    @Test
+    void staleAdministratorCannotEditOrDelete() {
+        var service = new CategoryService(current -> new UserAccount(42, "admin", "a@example.test", null, "USER", 1),
+                List::of, (actor, name, parent) -> fail("Denied insert"));
+        assertEquals("ADMIN_REQUIRED", assertThrows(MallBusinessException.class,
+                () -> service.updateFor(ADMIN, 7, "名称", null)).code());
+        assertEquals("ADMIN_REQUIRED", assertThrows(MallBusinessException.class,
+                () -> service.deleteFor(ADMIN, 7)).code());
+    }
 }

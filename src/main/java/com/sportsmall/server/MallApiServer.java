@@ -64,7 +64,7 @@ public final class MallApiServer implements AutoCloseable {
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.2.5", "status", "UP");
+            return Map.of("application", "sports-mall", "version", "0.2.6", "status", "UP");
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");
@@ -106,6 +106,19 @@ public final class MallApiServer implements AutoCloseable {
             var parent = body.get("parentId");
             Long parentId = parent == null || parent.isJsonNull() ? null : positiveId(body, "parentId");
             return services.categories.createFor(user, text(body, "name"), parentId);
+        }
+        if (path.matches("/api/admin/categories/[1-9][0-9]*")) {
+            query(exchange);
+            long id = idSegment(path, 4);
+            if (method.equals("PUT")) {
+                var body = body(exchange, "name", "parentId");
+                var parent = body.get("parentId");
+                Long parentId = parent == null || parent.isJsonNull() ? null : positiveId(body, "parentId");
+                return services.categories.updateFor(user, id, text(body, "name"), parentId);
+            }
+            requireMethod(method, "DELETE");
+            body(exchange);
+            return new ApiDtos.CategoryDeletion(services.categories.deleteFor(user, id));
         }
         if (path.equals("/api/me/phone")) {
             requireMethod(method, "PATCH");

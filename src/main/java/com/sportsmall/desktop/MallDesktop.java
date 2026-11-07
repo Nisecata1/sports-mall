@@ -405,7 +405,7 @@ public final class MallDesktop extends JFrame {
 
     private void showCategories() {
         task("正在读取分类树", () -> api.categories(), categories -> {
-            JPanel page = page("分类管理", "查看分类层级，新增根分类或子分类");
+            JPanel page = page("分类管理", "查看分类层级，新增、编辑和删除分类");
             DefaultMutableTreeNode root = new DefaultMutableTreeNode("全部分类");
             Map<Long, DefaultMutableTreeNode> nodes = new java.util.LinkedHashMap<>();
             for (CategoryView category : categories) {
@@ -421,7 +421,7 @@ public final class MallDesktop extends JFrame {
             for (int row = 0; row < tree.getRowCount(); row++) tree.expandRow(row);
             page.add(new JScrollPane(tree), BorderLayout.CENTER);
             JPanel controls = column();
-            JLabel selected = new JLabel("选择一条分类，可在它下面新增子分类。");
+            JLabel selected = new JLabel("选择一条分类，可新增子分类、编辑名称与上级，或删除空分类。");
             controls.add(selected);
             JPanel actions = row();
             actions.add(button("刷新分类树", this::showCategories));
@@ -433,6 +433,20 @@ public final class MallDesktop extends JFrame {
                 }
             });
             addChild.setEnabled(false);
+            JButton edit = button("编辑分类", () -> {
+                var node = (DefaultMutableTreeNode) tree.getLastSelectedPathComponent();
+                if (node != null && node.getUserObject() instanceof CategoryChoice choice) {
+                    editCategory(choice.category(), categories);
+                }
+            });
+            JButton delete = button("删除分类", () -> {
+                var node = (DefaultMutableTreeNode) tree.getLastSelectedPathComponent();
+                if (node != null && node.getUserObject() instanceof CategoryChoice choice) {
+                    deleteCategory(choice.category());
+                }
+            });
+            edit.setEnabled(false);
+            delete.setEnabled(false);
             tree.addTreeSelectionListener(event -> {
                 var node = (DefaultMutableTreeNode) tree.getLastSelectedPathComponent();
                 if (node != null && node.getUserObject() instanceof CategoryChoice choice) {
@@ -440,12 +454,18 @@ public final class MallDesktop extends JFrame {
                     selected.setText("当前分类：" + category.name() + "；编号：" + category.categoryId()
                             + "；上级编号：" + (category.parentId() == null ? "无（根分类）" : category.parentId()));
                     addChild.setEnabled(true);
+                    edit.setEnabled(true);
+                    delete.setEnabled(true);
                 } else {
                     selected.setText("全部分类是窗口的树根，数据库中没有这一条记录。");
                     addChild.setEnabled(false);
+                    edit.setEnabled(false);
+                    delete.setEnabled(false);
                 }
             });
             actions.add(addChild);
+            actions.add(edit);
+            actions.add(delete);
             controls.add(actions);
             page.add(controls, BorderLayout.SOUTH);
             display(page);
@@ -466,6 +486,48 @@ public final class MallDesktop extends JFrame {
 
     private record CategoryChoice(CategoryView category) {
         @Override public String toString() { return category.name() + "（编号" + category.categoryId() + "）"; }
+    }
+
+    private void editCategory(CategoryView category, List<CategoryView> categories) {
+        JTextField name = named(new JTextField(category.name(), 25), "分类名称");
+        JComboBox<CategoryParentChoice> parents = named(new JComboBox<>(), "上级分类");
+        parents.addItem(new CategoryParentChoice(null, "无上级（根分类）"));
+        for (CategoryView candidate : categories) {
+            if (candidate.categoryId() == category.categoryId()) continue;
+            var option = new CategoryParentChoice(candidate.categoryId(),
+                    candidate.name() + "（编号" + candidate.categoryId() + "）");
+            parents.addItem(option);
+            if (java.util.Objects.equals(candidate.categoryId(), category.parentId())) parents.setSelectedItem(option);
+        }
+        JPanel form = column();
+        form.add(new JLabel("正在编辑：编号" + category.categoryId() + "；编号保持不变。"));
+        form.add(new JLabel("分类名称（1至50个字符）"));
+        form.add(name);
+        form.add(new JLabel("上级分类（后端会阻止把分类移入自身的下级）"));
+        form.add(parents);
+        if (JOptionPane.showConfirmDialog(this, form, "编辑分类", JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
+        var parent = (CategoryParentChoice) parents.getSelectedItem();
+        String newName = name.getText();
+        task("正在修改分类", () -> api.updateCategory(category.categoryId(), newName, parent.id()), saved -> {
+            message("分类已更新：" + saved.name() + "，编号=" + saved.categoryId() + "。");
+            showCategories();
+        });
+    }
+
+    private void deleteCategory(CategoryView category) {
+        if (JOptionPane.showConfirmDialog(this,
+                "删除“" + category.name() + "”（编号" + category.categoryId() + "）？\n"
+                        + "只允许删除没有下级分类、没有商品引用的分类。确认后将删除这条分类记录。",
+                "删除分类", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) != JOptionPane.YES_OPTION) return;
+        task("正在删除分类", () -> api.deleteCategory(category.categoryId()), deleted -> {
+            message(deleted ? "分类已删除。" : "分类未删除，请刷新后检查。");
+            showCategories();
+        });
+    }
+
+    private record CategoryParentChoice(Long id, String label) {
+        @Override public String toString() { return label; }
     }
 
     private void showAdminUsers() {

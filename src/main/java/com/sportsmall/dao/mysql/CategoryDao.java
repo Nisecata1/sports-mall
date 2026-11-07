@@ -4,6 +4,7 @@ import com.sportsmall.exception.MallBusinessException;
 import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.CategoryView;
 import com.sportsmall.util.JdbcTransactions;
+import com.sportsmall.util.CategoryTrees;
 
 import javax.sql.DataSource;
 import java.sql.*;
@@ -68,6 +69,84 @@ public final class CategoryDao {
         } catch (SQLException failure) {
             throw new MallDataAccessException("CATEGORY_SAVE_UNCONFIRMED",
                     "分类保存结果未确认，请先刷新分类树或查询categories表，再决定是否重新保存。");
+        }
+    }
+
+    public CategoryView update(long actorId, long id, String name, Long parentId) {
+        try {
+            return JdbcTransactions.execute(dataSource, connection -> {
+                requireAdministrator(connection, actorId);
+                // 课程规模分类较少：按主键锁定分类记录，使并发改上级不能各自通过旧树检查。
+                List<CategoryView> rows = lockedTree(connection);
+                CategoryTrees.validateMove(rows, id, parentId);
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE categories SET name = ?, parent_id = ? WHERE category_id = ?")) {
+                    statement.setString(1, name);
+                    if (parentId == null) statement.setNull(2, Types.BIGINT);
+                    else statement.setLong(2, parentId);
+                    statement.setLong(3, id);
+                    statement.executeUpdate(); // 原值保存也允许成功；随后以实际读回为准。
+                }
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT category_id, name, parent_id FROM categories WHERE category_id = ?")) {
+                    statement.setLong(1, id);
+                    try (ResultSet saved = statement.executeQuery()) {
+                        if (!saved.next()) throw new SQLException("Updated category missing");
+                        CategoryView result = readRow(saved);
+                        if (!name.equals(result.name()) || !Objects.equals(parentId, result.parentId())) {
+                            throw new SQLException("Updated category does not match submitted fields");
+                        }
+                        return result;
+                    }
+                }
+            });
+        } catch (SQLException failure) {
+            throw new MallDataAccessException("CATEGORY_UPDATE_UNCONFIRMED",
+                    "分类修改结果未确认，请先刷新分类树或查询categories表，再决定是否重新保存。");
+        }
+    }
+
+    public boolean delete(long actorId, long id) {
+        try {
+            return JdbcTransactions.execute(dataSource, connection -> {
+                requireAdministrator(connection, actorId);
+                List<CategoryView> rows = lockedTree(connection);
+                CategoryTrees.validate(rows);
+                CategoryTrees.requireCategory(rows, id);
+                if (rows.stream().anyMatch(row -> Objects.equals(row.parentId(), id))) {
+                    throw new MallBusinessException("CATEGORY_HAS_CHILDREN", "该分类仍有下级分类，请先调整下级，不能直接删除。");
+                }
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT item_id FROM items WHERE category_id = ? LIMIT 1")) {
+                    statement.setLong(1, id);
+                    try (ResultSet items = statement.executeQuery()) {
+                        if (items.next()) {
+                            throw new MallBusinessException("CATEGORY_HAS_ITEMS", "该分类仍有商品引用，请先调整商品分类，不能直接删除。");
+                        }
+                    }
+                }
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "DELETE FROM categories WHERE category_id = ?")) {
+                    statement.setLong(1, id);
+                    if (statement.executeUpdate() != 1) throw new SQLException("Unexpected category delete count");
+                }
+                return true;
+            });
+        } catch (SQLException failure) {
+            if (failure.getErrorCode() == 1451) {
+                throw new MallBusinessException("CATEGORY_REFERENCED", "该分类仍被其他记录引用，请刷新后检查下级分类和商品。");
+            }
+            throw new MallDataAccessException("CATEGORY_DELETE_UNCONFIRMED",
+                    "分类删除结果未确认，请先刷新分类树或查询categories表，再决定是否重试。");
+        }
+    }
+
+    private static List<CategoryView> lockedTree(Connection connection) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(FIND_ALL + " FOR UPDATE");
+             ResultSet rows = statement.executeQuery()) {
+            List<CategoryView> result = new ArrayList<>();
+            while (rows.next()) result.add(readRow(rows));
+            return result;
         }
     }
 

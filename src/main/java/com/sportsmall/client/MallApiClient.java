@@ -57,6 +57,16 @@ public final class MallApiClient {
         body.put("parentId", parentId);
         return request("POST", "/api/admin/categories", body, CategoryView.class);
     }
+    public CategoryView updateCategory(long id, String name, Long parentId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("name", name);
+        body.put("parentId", parentId);
+        return request("PUT", "/api/admin/categories/" + id, body, CategoryView.class);
+    }
+    public boolean deleteCategory(long id) {
+        ApiDtos.CategoryDeletion result = request("DELETE", "/api/admin/categories/" + id, Map.of(), ApiDtos.CategoryDeletion.class);
+        return result.deleted();
+    }
     public AccountOverview overview() { return request("GET", "/api/me/overview", null, AccountOverview.class); }
     public UserProfile profile() {
         return request("GET", "/api/me/profile", null, UserProfile.class);
