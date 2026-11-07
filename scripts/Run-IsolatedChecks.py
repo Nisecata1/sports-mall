@@ -11,11 +11,11 @@ sqldata=root/"mysql-data"; mongodata=root/"mongo-data"; mongodata.mkdir()
 java=pathlib.Path(os.environ["JAVA_HOME"])/"bin/java.exe"
 no_window=getattr(subprocess,"CREATE_NO_WINDOW",0)
 owned=[]; handles=[]
-def run(args,*,input=None,timeout=60,log=None):
+def run(args,*,input=None,timeout=60,log=None,check=True):
     p=subprocess.run([str(x) for x in args],input=input,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=timeout,creationflags=no_window)
     out=p.stdout.decode("utf-8","replace")
     if log: (root/log).write_text(out,encoding="utf-8")
-    if p.returncode:
+    if p.returncode and check:
         print(out[-5000:],flush=True)
         raise RuntimeError("Command failed: "+str(args[0])+" exit="+str(p.returncode))
     return out
@@ -66,7 +66,8 @@ finally:
     if owned:
         try: run([mysqlbase/"bin/mysqladmin.exe","--no-defaults","--host=127.0.0.1","--port="+str(sqlport),"--user=root","shutdown"],timeout=12,log="mysql-shutdown.log")
         except Exception as e: print("MYSQL_SHUTDOWN="+type(e).__name__,flush=True)
-        try: run(shell+["--eval",'db.getSiblingDB("admin").shutdownServer()'],timeout=12,log="mongo-shutdown.log")
+        # 服务端退出会主动断开mongosh连接；保存输出，随后以自己启动的进程退出为准。
+        try: run(shell+["--eval",'db.getSiblingDB("admin").shutdownServer()'],timeout=12,log="mongo-shutdown.log",check=False)
         except Exception as e: print("MONGO_SHUTDOWN="+type(e).__name__,flush=True)
     for p in owned:
         try: p.wait(timeout=10)

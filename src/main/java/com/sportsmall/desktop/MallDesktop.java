@@ -207,6 +207,8 @@ public final class MallDesktop extends JFrame {
             navigation.add(button("用户管理", this::showAdminUsers));
             navigation.add(Box.createVerticalStrut(12));
             navigation.add(button("分类管理", this::showCategories));
+            navigation.add(Box.createVerticalStrut(12));
+            navigation.add(button("商品管理", this::showAdminItems));
         }
         body.add(navigation, BorderLayout.WEST);
         workspace = new JPanel(new BorderLayout());
@@ -400,6 +402,60 @@ public final class MallDesktop extends JFrame {
                     + "\n\n按订单创建月份筛选，按查询时的当前状态统计。"
                     + "\n金额合计该月创建且当前已完成的订单历史金额。");
             output.setCaretPosition(0);
+        });
+    }
+
+    private void showAdminItems() {
+        task("正在读取商品管理列表", () -> api.adminItems(), items -> {
+            JPanel page = page("商品管理", "维护商品名称、分类、单价和上下架状态");
+            JTable table = dataTable("商品管理列表", new String[]{"编号", "商品名称", "分类编号", "分类", "单价（元）", "状态"},
+                    items.stream().map(item -> new Object[]{item.itemId(), item.title(), item.categoryId(),
+                            item.categoryName(), money(item.price()), item.status() == 1 ? "上架" : "下架"}).toList());
+            page.add(new JScrollPane(table), BorderLayout.CENTER);
+            JPanel actions = row();
+            actions.add(button("刷新商品列表", this::showAdminItems));
+            actions.add(button("新增商品", () -> editAdminItem(null)));
+            actions.add(button("编辑／上下架", () -> selected(table, items, this::editAdminItem)));
+            actions.add(note("含上下架商品，按编号显示前100项。"));
+            page.add(actions, BorderLayout.SOUTH);
+            display(page);
+        });
+    }
+
+    private void editAdminItem(AdminItemView item) {
+        task("正在读取可选分类", () -> api.categories(), categories -> {
+            if (categories.isEmpty()) { message("请先在分类管理中新增商品分类。"); return; }
+            JTextField title = named(new JTextField(item == null ? "" : item.title(), 28), "管理商品名称");
+            JTextField price = named(new JTextField(item == null ? "" : item.price().toPlainString(), 12), "管理商品单价");
+            JComboBox<CategoryChoice> category = named(new JComboBox<>(categories.stream()
+                    .map(CategoryChoice::new).toArray(CategoryChoice[]::new)), "管理商品分类");
+            if (item != null) {
+                for (int index = 0; index < category.getItemCount(); index++) {
+                    if (category.getItemAt(index).category().categoryId() == item.categoryId()) category.setSelectedIndex(index);
+                }
+            }
+            JComboBox<String> state = named(new JComboBox<>(new String[]{"下架", "上架"}), "管理商品状态");
+            state.setSelectedIndex(item == null ? 0 : item.status());
+            JPanel form = column();
+            form.add(new JLabel(item == null ? "新增商品基础信息" : "编辑商品编号" + item.itemId() + "；已有订单金额保留。"));
+            form.add(new JLabel("商品名称（1至200个字符）")); form.add(title);
+            form.add(new JLabel("所属分类")); form.add(category);
+            form.add(new JLabel("单价（元，大于0，最多两位小数）")); form.add(price);
+            form.add(new JLabel("销售状态")); form.add(state);
+            if (JOptionPane.showConfirmDialog(this, form, item == null ? "新增商品" : "编辑商品／上下架",
+                    JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
+            BigDecimal amount;
+            try { amount = new BigDecimal(price.getText().strip()); }
+            catch (NumberFormatException failure) { message("单价请输入数字，例如89.90。"); return; }
+            String newTitle = title.getText();
+            long categoryId = ((CategoryChoice) category.getSelectedItem()).category().categoryId();
+            int statusValue = state.getSelectedIndex();
+            task("正在保存商品", () -> item == null ? api.createItem(newTitle, categoryId, amount, statusValue)
+                    : api.updateItem(item.itemId(), newTitle, categoryId, amount, statusValue), saved -> {
+                message("商品已保存：" + saved.title() + "，编号=" + saved.itemId() + "，"
+                        + (saved.status() == 1 ? "上架" : "下架") + "。");
+                showAdminItems();
+            });
         });
     }
 

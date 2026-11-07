@@ -48,6 +48,15 @@ public final class MallApiClient {
     public List<AdminUserSummary> adminUsers() {
         return request("GET", "/api/admin/users", null, new TypeToken<List<AdminUserSummary>>(){}.getType());
     }
+    public List<AdminItemView> adminItems() {
+        return request("GET", "/api/admin/items", null, new TypeToken<List<AdminItemView>>(){}.getType());
+    }
+    public AdminItemView createItem(String title, long categoryId, BigDecimal price, int status) {
+        return request("POST", "/api/admin/items", new ItemFields(title, categoryId, price, status), AdminItemView.class);
+    }
+    public AdminItemView updateItem(long id, String title, long categoryId, BigDecimal price, int status) {
+        return request("PUT", "/api/admin/items/" + id, new ItemFields(title, categoryId, price, status), AdminItemView.class);
+    }
     public List<CategoryView> categories() {
         return request("GET", "/api/admin/categories", null, new TypeToken<List<CategoryView>>(){}.getType());
     }

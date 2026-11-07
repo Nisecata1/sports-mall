@@ -46,7 +46,7 @@ public final class MallApiServer implements AutoCloseable {
         } catch (MallDataAccessException problem) {
             LOG.warn("接口数据操作未完成，代码={}", problem.code());
             if (problem.code().startsWith("MONTHLY_REPORT_") || problem.code().startsWith("PROFILE_")
-                    || problem.code().startsWith("CATEGORY_")) {
+                    || problem.code().startsWith("CATEGORY_") || problem.code().startsWith("ADMIN_ITEM_")) {
                 respond(exchange, 503, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
                 return;
             }
@@ -64,7 +64,7 @@ public final class MallApiServer implements AutoCloseable {
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.2.6", "status", "UP");
+            return Map.of("application", "sports-mall", "version", "0.2.7", "status", "UP");
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");
@@ -97,6 +97,19 @@ public final class MallApiServer implements AutoCloseable {
             requireMethod(method, "GET");
             query(exchange); // 不接受role或user_id等自报身份参数。
             return services.adminUsers.listUsers(user);
+        }
+        if (path.equals("/api/admin/items")) {
+            query(exchange);
+            if (method.equals("GET")) return services.adminItems.listFor(user);
+            requireMethod(method, "POST");
+            ItemFields fields = itemFields(body(exchange, "title", "categoryId", "price", "status"));
+            return services.adminItems.createFor(user, fields.title(), fields.categoryId(), fields.price(), fields.status());
+        }
+        if (path.matches("/api/admin/items/[1-9][0-9]*")) {
+            requireMethod(method, "PUT");
+            query(exchange);
+            ItemFields fields = itemFields(body(exchange, "title", "categoryId", "price", "status"));
+            return services.adminItems.updateFor(user, idSegment(path, 4), fields.title(), fields.categoryId(), fields.price(), fields.status());
         }
         if (path.equals("/api/admin/categories")) {
             query(exchange);
@@ -235,6 +248,12 @@ public final class MallApiServer implements AutoCloseable {
         if (element == null || !element.isJsonPrimitive()) throw invalid("缺少有效的数字字段。");
         try { return element.getAsBigDecimal(); }
         catch (NumberFormatException failure) { throw invalid("数字字段格式不正确。"); }
+    }
+    private static ItemFields itemFields(JsonObject body) {
+        int status;
+        try { status = decimal(body, "status").intValueExact(); }
+        catch (ArithmeticException failure) { throw invalid("商品状态应为整数。"); }
+        return new ItemFields(text(body, "title"), positiveId(body, "categoryId"), decimal(body, "price"), status);
     }
     private static long positiveId(JsonObject object, String key) {
         try {
