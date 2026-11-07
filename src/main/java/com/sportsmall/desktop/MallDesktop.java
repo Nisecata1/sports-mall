@@ -201,6 +201,10 @@ public final class MallDesktop extends JFrame {
         navigation.add(button("数据统计", this::showStatistics));
         navigation.add(Box.createVerticalStrut(12));
         navigation.add(button("我的账号", this::showAccount));
+        if ("ADMIN".equals(currentUser.role())) {
+            navigation.add(Box.createVerticalStrut(12));
+            navigation.add(button("用户管理", this::showAdminUsers));
+        }
         body.add(navigation, BorderLayout.WEST);
         workspace = new JPanel(new BorderLayout());
         workspace.setBorder(new EmptyBorder(22, 14, 20, 28));
@@ -393,6 +397,21 @@ public final class MallDesktop extends JFrame {
                     + "\n\n按订单创建月份筛选，按查询时的当前状态统计。"
                     + "\n金额合计该月创建且当前已完成的订单历史金额。");
             output.setCaretPosition(0);
+        });
+    }
+
+    private void showAdminUsers() {
+        task("正在读取用户列表", () -> api.adminUsers(), users -> {
+            JPanel page = page("用户管理", "查看账号角色与状态");
+            JTable table = dataTable("用户列表", new String[]{"用户编号", "用户名", "角色", "状态"},
+                    users.stream().map(user -> new Object[]{user.userId(), user.username(), user.role(),
+                            user.status() == 1 ? "正常" : "停用"}).toList());
+            page.add(new JScrollPane(table), BorderLayout.CENTER);
+            JPanel actions = row();
+            actions.add(button("刷新用户列表", this::showAdminUsers));
+            actions.add(note("显示前100个账号，按用户编号排序。"));
+            page.add(actions, BorderLayout.SOUTH);
+            display(page);
         });
     }
 

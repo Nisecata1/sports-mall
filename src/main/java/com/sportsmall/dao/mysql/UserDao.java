@@ -5,6 +5,7 @@ import com.sportsmall.exception.MallDataAccessException;
 import com.sportsmall.model.RegisteredUser;
 import com.sportsmall.model.LoginAccount;
 import com.sportsmall.model.UserAccount;
+import com.sportsmall.model.AdminUserSummary;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -15,6 +16,8 @@ import java.sql.Statement;
 import java.sql.Types;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
 
 /** 读写商城账号；密码校验在业务层执行，普通注册固定为 USER。 */
 public final class UserDao {
@@ -39,6 +42,11 @@ public final class UserDao {
 
     private static final String UPDATE_ACTIVE_PHONE = """
             UPDATE users SET phone = ? WHERE user_id = ? AND status = 1
+            """;
+
+    private static final String FIND_SUMMARIES = """
+            SELECT user_id, username, role, status
+            FROM users ORDER BY user_id LIMIT ?
             """;
 
     public UserDao(DataSource dataSource) {
@@ -91,6 +99,23 @@ public final class UserDao {
         } catch (SQLException exception) {
             throw new MallDataAccessException("USER_UPDATE_FAILED",
                     "联系方式未确认保存，请重新查看账号资料并检查MySQL连接。");
+        }
+    }
+
+    public List<AdminUserSummary> findSummaries(int limit) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(FIND_SUMMARIES)) {
+            statement.setInt(1, limit);
+            try (ResultSet rows = statement.executeQuery()) {
+                List<AdminUserSummary> result = new ArrayList<>();
+                while (rows.next()) {
+                    result.add(new AdminUserSummary(rows.getLong("user_id"), rows.getString("username"),
+                            rows.getString("role"), rows.getInt("status")));
+                }
+                return List.copyOf(result);
+            }
+        } catch (SQLException exception) {
+            throw new MallDataAccessException("USER_LIST_FAILED", "无法读取用户列表，请检查MySQL连接。");
         }
     }
 

@@ -45,6 +45,9 @@ public final class MallApiClient {
     }
     public List<ItemView> items() { return request("GET", "/api/items", null, new TypeToken<List<ItemView>>(){}.getType()); }
     public UserAccount account() { return request("GET", "/api/me", null, UserAccount.class); }
+    public List<AdminUserSummary> adminUsers() {
+        return request("GET", "/api/admin/users", null, new TypeToken<List<AdminUserSummary>>(){}.getType());
+    }
     public AccountOverview overview() { return request("GET", "/api/me/overview", null, AccountOverview.class); }
     public UserProfile profile() {
         return request("GET", "/api/me/profile", null, UserProfile.class);

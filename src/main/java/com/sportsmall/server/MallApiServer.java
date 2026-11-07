@@ -41,7 +41,8 @@ public final class MallApiServer implements AutoCloseable {
         } catch (ApiProblem problem) {
             respond(exchange, problem.status, new ApiDtos.ErrorResponse(problem.code, problem.getMessage()));
         } catch (MallBusinessException problem) {
-            respond(exchange, 400, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
+            int status = problem.code().equals("ADMIN_REQUIRED") ? 403 : 400;
+            respond(exchange, status, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
         } catch (MallDataAccessException problem) {
             LOG.warn("接口数据操作未完成，代码={}", problem.code());
             if (problem.code().startsWith("MONTHLY_REPORT_") || problem.code().startsWith("PROFILE_")) {
@@ -62,7 +63,7 @@ public final class MallApiServer implements AutoCloseable {
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.2.3", "status", "UP");
+            return Map.of("application", "sports-mall", "version", "0.2.4", "status", "UP");
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");
@@ -90,6 +91,11 @@ public final class MallApiServer implements AutoCloseable {
         }
         if (path.equals("/api/me")) {
             requireMethod(method, "GET"); return services.accounts.viewMyAccount(user);
+        }
+        if (path.equals("/api/admin/users")) {
+            requireMethod(method, "GET");
+            query(exchange); // 不接受role或user_id等自报身份参数。
+            return services.adminUsers.listUsers(user);
         }
         if (path.equals("/api/me/phone")) {
             requireMethod(method, "PATCH");
