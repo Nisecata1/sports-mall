@@ -48,6 +48,15 @@ public final class MallApiClient {
     public List<AdminUserSummary> adminUsers() {
         return request("GET", "/api/admin/users", null, new TypeToken<List<AdminUserSummary>>(){}.getType());
     }
+    public List<CategoryView> categories() {
+        return request("GET", "/api/admin/categories", null, new TypeToken<List<CategoryView>>(){}.getType());
+    }
+    public CategoryView createCategory(String name, Long parentId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("name", name);
+        body.put("parentId", parentId);
+        return request("POST", "/api/admin/categories", body, CategoryView.class);
+    }
     public AccountOverview overview() { return request("GET", "/api/me/overview", null, AccountOverview.class); }
     public UserProfile profile() {
         return request("GET", "/api/me/profile", null, UserProfile.class);

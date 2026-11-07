@@ -24,6 +24,7 @@ public final class MallServices implements AutoCloseable {
     final MonthlyOrderService monthlyOrders;
     final ProfileService profiles;
     final AdminUserService adminUsers;
+    final CategoryService categories;
 
     public MallServices(HikariDataSource sql, MongoClient mongo, MongoDatabase database) {
         this.sql = sql; this.mongo = mongo;
@@ -39,6 +40,7 @@ public final class MallServices implements AutoCloseable {
         monthlyOrders = new MonthlyOrderService(accounts, new OrderDao(sql));
         profiles = new ProfileService(accounts, new ProfileDao(sql));
         adminUsers = new AdminUserService(accounts, users);
+        categories = new CategoryService(accounts, new CategoryDao(sql));
     }
     public static MallServices open() {
         HikariDataSource sql = DatabaseConfig.load().openDataSource();

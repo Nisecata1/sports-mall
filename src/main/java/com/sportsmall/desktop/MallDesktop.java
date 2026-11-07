@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.text.JTextComponent;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
@@ -204,6 +205,8 @@ public final class MallDesktop extends JFrame {
         if ("ADMIN".equals(currentUser.role())) {
             navigation.add(Box.createVerticalStrut(12));
             navigation.add(button("用户管理", this::showAdminUsers));
+            navigation.add(Box.createVerticalStrut(12));
+            navigation.add(button("分类管理", this::showCategories));
         }
         body.add(navigation, BorderLayout.WEST);
         workspace = new JPanel(new BorderLayout());
@@ -398,6 +401,71 @@ public final class MallDesktop extends JFrame {
                     + "\n金额合计该月创建且当前已完成的订单历史金额。");
             output.setCaretPosition(0);
         });
+    }
+
+    private void showCategories() {
+        task("正在读取分类树", () -> api.categories(), categories -> {
+            JPanel page = page("分类管理", "查看分类层级，新增根分类或子分类");
+            DefaultMutableTreeNode root = new DefaultMutableTreeNode("全部分类");
+            Map<Long, DefaultMutableTreeNode> nodes = new java.util.LinkedHashMap<>();
+            for (CategoryView category : categories) {
+                nodes.put(category.categoryId(), new DefaultMutableTreeNode(new CategoryChoice(category)));
+            }
+            for (CategoryView category : categories) {
+                DefaultMutableTreeNode parent = category.parentId() == null ? root : nodes.get(category.parentId());
+                parent.add(nodes.get(category.categoryId()));
+            }
+            JTree tree = named(new JTree(root), "分类树");
+            tree.setRowHeight(28);
+            tree.getSelectionModel().setSelectionMode(javax.swing.tree.TreeSelectionModel.SINGLE_TREE_SELECTION);
+            for (int row = 0; row < tree.getRowCount(); row++) tree.expandRow(row);
+            page.add(new JScrollPane(tree), BorderLayout.CENTER);
+            JPanel controls = column();
+            JLabel selected = new JLabel("选择一条分类，可在它下面新增子分类。");
+            controls.add(selected);
+            JPanel actions = row();
+            actions.add(button("刷新分类树", this::showCategories));
+            actions.add(button("新增根分类", () -> createCategory(null)));
+            JButton addChild = button("新增子分类", () -> {
+                var node = (DefaultMutableTreeNode) tree.getLastSelectedPathComponent();
+                if (node != null && node.getUserObject() instanceof CategoryChoice choice) {
+                    createCategory(choice.category());
+                }
+            });
+            addChild.setEnabled(false);
+            tree.addTreeSelectionListener(event -> {
+                var node = (DefaultMutableTreeNode) tree.getLastSelectedPathComponent();
+                if (node != null && node.getUserObject() instanceof CategoryChoice choice) {
+                    CategoryView category = choice.category();
+                    selected.setText("当前分类：" + category.name() + "；编号：" + category.categoryId()
+                            + "；上级编号：" + (category.parentId() == null ? "无（根分类）" : category.parentId()));
+                    addChild.setEnabled(true);
+                } else {
+                    selected.setText("全部分类是窗口的树根，数据库中没有这一条记录。");
+                    addChild.setEnabled(false);
+                }
+            });
+            actions.add(addChild);
+            controls.add(actions);
+            page.add(controls, BorderLayout.SOUTH);
+            display(page);
+        });
+    }
+
+    private void createCategory(CategoryView parent) {
+        String name = JOptionPane.showInputDialog(this,
+                parent == null ? "新根分类名称（1至50个字符）：" : "在“" + parent.name() + "”下面新增子分类，名称：");
+        if (name == null) return;
+        Long parentId = parent == null ? null : parent.categoryId();
+        task("正在保存分类", () -> api.createCategory(name, parentId), saved -> {
+            message("分类已保存：" + saved.name() + "，编号=" + saved.categoryId()
+                    + "，上级编号=" + (saved.parentId() == null ? "无（根分类）" : saved.parentId()) + "。");
+            showCategories();
+        });
+    }
+
+    private record CategoryChoice(CategoryView category) {
+        @Override public String toString() { return category.name() + "（编号" + category.categoryId() + "）"; }
     }
 
     private void showAdminUsers() {

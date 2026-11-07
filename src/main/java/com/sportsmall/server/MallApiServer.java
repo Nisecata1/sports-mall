@@ -45,7 +45,8 @@ public final class MallApiServer implements AutoCloseable {
             respond(exchange, status, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
         } catch (MallDataAccessException problem) {
             LOG.warn("接口数据操作未完成，代码={}", problem.code());
-            if (problem.code().startsWith("MONTHLY_REPORT_") || problem.code().startsWith("PROFILE_")) {
+            if (problem.code().startsWith("MONTHLY_REPORT_") || problem.code().startsWith("PROFILE_")
+                    || problem.code().startsWith("CATEGORY_")) {
                 respond(exchange, 503, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
                 return;
             }
@@ -63,7 +64,7 @@ public final class MallApiServer implements AutoCloseable {
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.2.4", "status", "UP");
+            return Map.of("application", "sports-mall", "version", "0.2.5", "status", "UP");
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");
@@ -96,6 +97,15 @@ public final class MallApiServer implements AutoCloseable {
             requireMethod(method, "GET");
             query(exchange); // 不接受role或user_id等自报身份参数。
             return services.adminUsers.listUsers(user);
+        }
+        if (path.equals("/api/admin/categories")) {
+            query(exchange);
+            if (method.equals("GET")) return services.categories.treeFor(user);
+            requireMethod(method, "POST");
+            var body = body(exchange, "name", "parentId");
+            var parent = body.get("parentId");
+            Long parentId = parent == null || parent.isJsonNull() ? null : positiveId(body, "parentId");
+            return services.categories.createFor(user, text(body, "name"), parentId);
         }
         if (path.equals("/api/me/phone")) {
             requireMethod(method, "PATCH");

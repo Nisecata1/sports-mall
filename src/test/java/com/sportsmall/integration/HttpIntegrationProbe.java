@@ -115,6 +115,7 @@ public final class HttpIntegrationProbe {
                 checks += MonthlyOrderIntegrationChecks.run(address, sql);
                 checks += ProfileIntegrationChecks.run(address, sql);
                 checks += AdminUserIntegrationChecks.run(address, sql);
+                checks += CategoryIntegrationChecks.run(address, sql);
             }
         }
         System.out.println("INTEGRATION_CHECKS_PASSED="+checks);

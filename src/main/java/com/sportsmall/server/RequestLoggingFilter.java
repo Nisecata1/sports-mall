@@ -22,6 +22,7 @@ final class RequestLoggingFilter extends Filter {
             Map.entry("/api/auth/logout", "退出登录"),
             Map.entry("/api/me", "读取本人账号"),
             Map.entry("/api/admin/users", "管理员读取用户列表"),
+            Map.entry("/api/admin/categories", "管理员查看或新增分类"),
             Map.entry("/api/me/phone", "修改本人电话"),
             Map.entry("/api/me/overview", "读取资料与订单概览"),
             Map.entry("/api/me/profile", "维护本人档案"),
