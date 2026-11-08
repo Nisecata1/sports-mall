@@ -1,4 +1,6 @@
 /target/
+/output/
+/scripts/__pycache__/
 /.idea/
 /.classpath
 /.project

@@ -44,7 +44,7 @@ try:
     mysqlp=launch([mysqlbase/"bin/mysqld.exe","--no-defaults","--console","--basedir="+str(mysqlbase),"--datadir="+str(sqldata),"--port="+str(sqlport),"--bind-address=127.0.0.1","--mysqlx=OFF"],"mysql-server.log")
     mongop=launch([mongobase/"server/bin/mongod.exe","--dbpath="+str(mongodata),"--port="+str(mongoport),"--bind_ip=127.0.0.1"],"mongo-server.log")
     wait_port(sqlport,mysqlp); wait_port(mongoport,mongop)
-    for f in ["mysql_schema.sql","mysql_log_import.sql","mysql_views.sql","mysql_procedures.sql","mysql_triggers.sql"]:
+    for f in ["mysql_schema.sql","mysql_log_import.sql","mysql_views.sql","mysql_procedures.sql","mysql_triggers.sql","mysql_query_indexes.sql"]:
         run(mysql,input=(repo/"src/main/resources/sql"/f).read_bytes(),log=f+".log")
     salt=b"0123456789ABCDEF"
     digest=hashlib.pbkdf2_hmac("sha256",b"synthetic-integration-password",salt,600000)
