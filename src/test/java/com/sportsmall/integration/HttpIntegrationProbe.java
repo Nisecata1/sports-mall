@@ -118,6 +118,7 @@ public final class HttpIntegrationProbe {
                 checks += CategoryIntegrationChecks.run(address, sql);
                 checks += CategoryMutationChecks.run(address, sql);
                 checks += AdminItemIntegrationChecks.run(address, sql, db);
+                checks += ItemDetailIntegrationChecks.run(address, sql, db);
             }
         }
         System.out.println("INTEGRATION_CHECKS_PASSED="+checks);

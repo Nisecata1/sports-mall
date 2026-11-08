@@ -11,6 +11,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /** 管理员基础商品读写；上下架保留商品及订单，MongoDB详情由独立操作维护。 */
 public final class AdminItemDao {
@@ -55,6 +56,18 @@ public final class AdminItemDao {
         } catch (SQLException failure) {
             throw new MallDataAccessException("ADMIN_ITEM_SAVE_UNCONFIRMED",
                     "商品新增结果未确认，请先刷新商品管理或查询items表，再决定是否重新保存。");
+        }
+    }
+
+    public Optional<AdminItemView> findById(long id) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT + " WHERE i.item_id = ?")) {
+            statement.setLong(1, id);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() ? Optional.of(readRow(rows)) : Optional.empty();
+            }
+        } catch (SQLException failure) {
+            throw new MallDataAccessException("ADMIN_ITEM_QUERY_FAILED", "商品读取失败，请检查MySQL连接与商品记录。");
         }
     }
 

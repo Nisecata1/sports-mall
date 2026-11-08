@@ -24,6 +24,7 @@ final class RequestLoggingFilter extends Filter {
             Map.entry("/api/admin/users", "管理员读取用户列表"),
             Map.entry("/api/admin/items", "管理员查看或新增商品"),
             Map.entry("/api/admin/items/{itemId}", "管理员编辑商品与上下架"),
+            Map.entry("/api/admin/items/{itemId}/detail", "管理员维护商品详情"),
             Map.entry("/api/admin/categories", "管理员查看或新增分类"),
             Map.entry("/api/admin/categories/{categoryId}", "管理员编辑或删除分类"),
             Map.entry("/api/me/phone", "修改本人电话"),
@@ -84,6 +85,9 @@ final class RequestLoggingFilter extends Filter {
         }
         if (path.matches("/api/admin/items/[1-9][0-9]*")) {
             return "/api/admin/items/{itemId}";
+        }
+        if (path.matches("/api/admin/items/[1-9][0-9]*/detail")) {
+            return "/api/admin/items/{itemId}/detail";
         }
         if (path.matches("/api/items/[1-9][0-9]*/(comments|comment-statistics)")) {
             return path.replaceFirst("/[1-9][0-9]*/", "/{itemId}/");

@@ -60,6 +60,18 @@ public final class MallApiClient {
     public List<CategoryView> categories() {
         return request("GET", "/api/admin/categories", null, new TypeToken<List<CategoryView>>(){}.getType());
     }
+    public Optional<ItemDetail> adminItemDetail(long itemId) {
+        ApiDtos.ItemDetailResponse result = request("GET", "/api/admin/items/" + itemId + "/detail", null, ApiDtos.ItemDetailResponse.class);
+        return result.detail();
+    }
+    public ItemDetail saveItemDetail(long itemId, String description, List<String> images, String language) {
+        return request("PUT", "/api/admin/items/" + itemId + "/detail",
+                new ApiDtos.ItemDetailFields(description, images, language), ItemDetail.class);
+    }
+    public boolean deleteItemDetail(long itemId) {
+        ApiDtos.ItemDetailDeletion result = request("DELETE", "/api/admin/items/" + itemId + "/detail", Map.of(), ApiDtos.ItemDetailDeletion.class);
+        return result.deleted();
+    }
     public CategoryView createCategory(String name, Long parentId) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", name);

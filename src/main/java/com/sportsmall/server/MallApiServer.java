@@ -46,7 +46,8 @@ public final class MallApiServer implements AutoCloseable {
         } catch (MallDataAccessException problem) {
             LOG.warn("接口数据操作未完成，代码={}", problem.code());
             if (problem.code().startsWith("MONTHLY_REPORT_") || problem.code().startsWith("PROFILE_")
-                    || problem.code().startsWith("CATEGORY_") || problem.code().startsWith("ADMIN_ITEM_")) {
+                    || problem.code().startsWith("CATEGORY_") || problem.code().startsWith("ADMIN_ITEM_")
+                    || problem.code().startsWith("ITEM_DETAIL_")) {
                 respond(exchange, 503, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
                 return;
             }
@@ -64,7 +65,7 @@ public final class MallApiServer implements AutoCloseable {
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.2.7", "status", "UP");
+            return Map.of("application", "sports-mall", "version", "0.2.8", "status", "UP");
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");
@@ -110,6 +111,19 @@ public final class MallApiServer implements AutoCloseable {
             query(exchange);
             ItemFields fields = itemFields(body(exchange, "title", "categoryId", "price", "status"));
             return services.adminItems.updateFor(user, idSegment(path, 4), fields.title(), fields.categoryId(), fields.price(), fields.status());
+        }
+        if (path.matches("/api/admin/items/[1-9][0-9]*/detail")) {
+            query(exchange);
+            long itemId = idSegment(path, 4);
+            if (method.equals("GET")) return new ApiDtos.ItemDetailResponse(services.itemDetails.viewFor(user, itemId));
+            if (method.equals("PUT")) {
+                var fields = body(exchange, "description", "images", "language");
+                return services.itemDetails.saveFor(user, itemId, text(fields, "description"),
+                        stringList(fields, "images"), text(fields, "language"));
+            }
+            requireMethod(method, "DELETE");
+            body(exchange);
+            return new ApiDtos.ItemDetailDeletion(services.itemDetails.deleteFor(user, itemId));
         }
         if (path.equals("/api/admin/categories")) {
             query(exchange);
@@ -248,6 +262,16 @@ public final class MallApiServer implements AutoCloseable {
         if (element == null || !element.isJsonPrimitive()) throw invalid("缺少有效的数字字段。");
         try { return element.getAsBigDecimal(); }
         catch (NumberFormatException failure) { throw invalid("数字字段格式不正确。"); }
+    }
+    private static List<String> stringList(JsonObject object, String key) {
+        var element = object.get(key);
+        if (element == null || !element.isJsonArray()) throw invalid("图片地址应为文字数组，可为空数组。");
+        List<String> values = new ArrayList<>();
+        for (var value : element.getAsJsonArray()) {
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) throw invalid("图片地址数组只能包含文字。");
+            values.add(value.getAsString());
+        }
+        return values;
     }
     private static ItemFields itemFields(JsonObject body) {
         int status;

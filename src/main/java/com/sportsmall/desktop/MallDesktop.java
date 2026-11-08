@@ -407,7 +407,7 @@ public final class MallDesktop extends JFrame {
 
     private void showAdminItems() {
         task("正在读取商品管理列表", () -> api.adminItems(), items -> {
-            JPanel page = page("商品管理", "维护商品名称、分类、单价和上下架状态");
+            JPanel page = page("商品管理", "维护商品基础信息与说明、图片地址等详情");
             JTable table = dataTable("商品管理列表", new String[]{"编号", "商品名称", "分类编号", "分类", "单价（元）", "状态"},
                     items.stream().map(item -> new Object[]{item.itemId(), item.title(), item.categoryId(),
                             item.categoryName(), money(item.price()), item.status() == 1 ? "上架" : "下架"}).toList());
@@ -417,7 +417,11 @@ public final class MallDesktop extends JFrame {
             actions.add(button("新增商品", () -> editAdminItem(null)));
             actions.add(button("编辑／上下架", () -> selected(table, items, this::editAdminItem)));
             actions.add(note("含上下架商品，按编号显示前100项。"));
-            page.add(actions, BorderLayout.SOUTH);
+            JPanel detailActions = row();
+            detailActions.add(button("编辑详情", () -> selected(table, items, this::editItemDetail)));
+            detailActions.add(button("删除详情", () -> selected(table, items, this::deleteItemDetail)));
+            JPanel controls = column(); controls.add(actions); controls.add(detailActions);
+            page.add(controls, BorderLayout.SOUTH);
             display(page);
         });
     }
@@ -456,6 +460,39 @@ public final class MallDesktop extends JFrame {
                         + (saved.status() == 1 ? "上架" : "下架") + "。");
                 showAdminItems();
             });
+        });
+    }
+
+    private void editItemDetail(AdminItemView item) {
+        task("正在读取商品详情", () -> api.adminItemDetail(item.itemId()), existing -> {
+            JTextArea description = named(new JTextArea(existing.map(ItemDetail::description).orElse(""), 7, 42), "商品说明");
+            description.setLineWrap(true); description.setWrapStyleWord(true);
+            JTextArea images = named(new JTextArea(existing.map(detail -> String.join("\n", detail.images())).orElse(""), 4, 42), "商品图片地址");
+            JTextField language = named(new JTextField(existing.map(ItemDetail::language).orElse("zh-CN"), 20), "详情内容语言");
+            JPanel form = column();
+            form.add(new JLabel(item.title() + "（编号" + item.itemId() + "）"));
+            form.add(new JLabel(existing.isPresent() ? "已有详情，保存将更新这份详情。" : "尚无详情，保存将创建一份详情。"));
+            form.add(new JLabel("商品说明（1至5000个字符）")); form.add(new JScrollPane(description));
+            form.add(new JLabel("图片地址（每行一个HTTP/HTTPS地址，最多10项；留空表示无图片）")); form.add(new JScrollPane(images));
+            form.add(new JLabel("内容语言（如zh-CN、en）")); form.add(language);
+            if (JOptionPane.showConfirmDialog(this, form, "编辑商品详情", JOptionPane.OK_CANCEL_OPTION,
+                    JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
+            String newDescription = description.getText(), newLanguage = language.getText();
+            List<String> newImages = images.getText().lines().map(String::strip).filter(value -> !value.isEmpty()).toList();
+            task("正在保存商品详情", () -> api.saveItemDetail(item.itemId(), newDescription, newImages, newLanguage), saved -> {
+                message("商品详情已保存：编号=" + saved.itemId() + "，图片地址=" + saved.images().size() + "项。");
+                showAdminItems();
+            });
+        });
+    }
+
+    private void deleteItemDetail(AdminItemView item) {
+        if (JOptionPane.showConfirmDialog(this, "删除“" + item.title() + "”（编号" + item.itemId()
+                + "）的说明、图片地址和语言？\n商品基础信息、订单和评论会保留。", "删除商品详情",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE) != JOptionPane.OK_OPTION) return;
+        task("正在删除商品详情", () -> api.deleteItemDetail(item.itemId()), deleted -> {
+            message(deleted ? "商品详情已删除，商品基础信息保留。" : "该商品当前没有详情，无需删除。");
+            showAdminItems();
         });
     }
 

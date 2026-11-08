@@ -14,6 +14,9 @@ public final class ApiDtos {
     public record PhoneChange(UserAccount account, boolean changed) {}
     public record ProfileDeletion(boolean deleted) {}
     public record CategoryDeletion(boolean deleted) {}
+    public record ItemDetailResponse(Optional<ItemDetail> detail) {}
+    public record ItemDetailDeletion(boolean deleted) {}
+    public record ItemDetailFields(String description, List<String> images, String language) {}
     public record BrowseTicket(String browseId, ItemView item, Optional<ItemDetail> detail) {}
     public record RankedItem(HotItemStatistics statistics, Optional<ItemView> item) {}
     public record HotReport(Instant fromInclusive, Instant throughInclusive, List<RankedItem> items) {}
