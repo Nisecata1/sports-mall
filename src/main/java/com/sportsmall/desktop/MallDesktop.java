@@ -222,18 +222,68 @@ public final class MallDesktop extends JFrame {
     }
 
     private void showProducts() {
-        task("正在读取在售商品", () -> api.items(), items -> {
-            JPanel page = page("商品浏览", "选择商品查看详情或创建订单");
+        showProducts(ItemFilter.defaults());
+    }
+
+    private void showProducts(ItemFilter filter) {
+        task("正在筛选在售商品", () -> new CatalogData(api.catalogCategories(), api.searchItems(filter)), result -> {
+            ItemPage found = result.page(); List<ItemView> items = found.items();
+            JPanel page = page("商品浏览", "条件共同生效；分类只匹配直接所属分类；修改条件后点击查询");
+            JTextField keyword = named(new JTextField(filter.keyword() == null ? "" : filter.keyword(), 12), "商品名称关键词");
+            JComboBox<CatalogCategory> category = named(new JComboBox<>(), "商品筛选分类");
+            category.setPreferredSize(new Dimension(210,32));
+            category.addItem(new CatalogCategory(null));
+            for (CategoryView value : result.categories()) {
+                var choice = new CatalogCategory(value); category.addItem(choice);
+                if (Objects.equals(filter.categoryId(),value.categoryId())) category.setSelectedItem(choice);
+            }
+            JTextField minimum = named(new JTextField(filter.minPrice() == null ? "" : filter.minPrice().toPlainString(), 7), "商品最低价");
+            JTextField maximum = named(new JTextField(filter.maxPrice() == null ? "" : filter.maxPrice().toPlainString(), 7), "商品最高价");
+            JComboBox<String> sort = named(new JComboBox<>(new String[]{"编号顺序","价格升序","价格降序"}), "商品排序");
+            sort.setSelectedIndex(switch(filter.sort()) { case "price_asc" -> 1; case "price_desc" -> 2; default -> 0; });
+            JComboBox<Integer> size = named(new JComboBox<>(new Integer[]{1,5,10,20,50,100}), "商品每页条数");
+            size.setSelectedItem(filter.pageSize());
+            Runnable search = () -> {
+                try {
+                    var chosen = ((CatalogCategory) category.getSelectedItem()).category();
+                    showProducts(new ItemFilter(keyword.getText(),chosen == null ? null : chosen.categoryId(),
+                            filterPrice(minimum.getText()),filterPrice(maximum.getText()),
+                            new String[]{"id","price_asc","price_desc"}[sort.getSelectedIndex()],1,(Integer)size.getSelectedItem()));
+                } catch(RuntimeException failure) { showFailure(failure); }
+            };
+            JPanel first = row();first.add(new JLabel("名称"));first.add(keyword);first.add(new JLabel("分类"));first.add(category);
+            first.add(button("查询",search));first.add(button("重置",this::showProducts));
+            keyword.addActionListener(event -> search.run());
+            JPanel second = row();second.add(new JLabel("最低价"));second.add(minimum);second.add(new JLabel("最高价"));second.add(maximum);
+            second.add(sort);second.add(new JLabel("每页"));second.add(size);
+            JPanel top = (JPanel)page.getComponent(0);top.add(first);top.add(second);
             JTable table = dataTable("在售商品", new String[]{"编号", "商品名称", "分类", "单价（元）"},
                     items.stream().map(item -> new Object[]{item.itemId(), item.title(), item.categoryName(), money(item.price())}).toList());
+            table.setAutoCreateRowSorter(false);table.setRowSorter(null);
             page.add(new JScrollPane(table), BorderLayout.CENTER);
+            JPanel paging = row();
+            JButton home = button("首页",() -> showProducts(filter.withPage(1)));home.setEnabled(found.hasPrevious());
+            JButton previous = button("上一页",() -> showProducts(filter.withPage(found.page()-1)));previous.setEnabled(found.hasPrevious());
+            JButton next = button("下一页",() -> showProducts(filter.withPage(found.page()+1)));next.setEnabled(found.hasNext());
+            paging.add(home);paging.add(previous);paging.add(next);
+            paging.add(new JLabel(found.total() == 0 ? "没有符合条件的在售商品" : "第"+found.page()+"页 / 共"+found.totalPages()+"页；共"+found.total()+"条"));
+            paging.add(button("刷新本页",() -> showProducts(filter)));
             JPanel actions = row();
-            actions.add(button("刷新商品", this::showProducts));
             actions.add(button("查看详情", () -> selected(table, items, item -> browse(item.itemId()))));
             actions.add(button("创建订单", () -> selected(table, items, this::createOrder)));
-            page.add(actions, BorderLayout.SOUTH);
+            JPanel controls = column();controls.add(paging);controls.add(actions);page.add(controls,BorderLayout.SOUTH);
             display(page);
         });
+    }
+
+    private static BigDecimal filterPrice(String input) {
+        if(input.isBlank())return null;
+        try { return new BigDecimal(input.strip()); }
+        catch(NumberFormatException failure) { throw new MallBusinessException("INVALID_ITEM_FILTER","筛选价格请输入数字，留空表示不限。"); }
+    }
+    private record CatalogData(List<CategoryView> categories,ItemPage page) {}
+    private record CatalogCategory(CategoryView category) {
+        @Override public String toString() { return category == null ? "全部分类" : category.name()+"（编号"+category.categoryId()+"）"; }
     }
 
     private void browse(long itemId) {

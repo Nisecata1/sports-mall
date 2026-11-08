@@ -44,6 +44,19 @@ public final class MallApiClient {
         finally { token = null; }
     }
     public List<ItemView> items() { return request("GET", "/api/items", null, new TypeToken<List<ItemView>>(){}.getType()); }
+    public ItemPage searchItems(ItemFilter filter) {
+        Map<String,Object> fields = new LinkedHashMap<>();
+        fields.put("keyword",filter.keyword());fields.put("categoryId",filter.categoryId());
+        fields.put("minPrice",filter.minPrice());fields.put("maxPrice",filter.maxPrice());
+        fields.put("sort",filter.sort());fields.put("page",filter.page());fields.put("pageSize",filter.pageSize());
+        String query = fields.entrySet().stream().filter(entry -> entry.getValue() != null)
+                .map(entry -> entry.getKey() + "=" + java.net.URLEncoder.encode(entry.getValue().toString(),java.nio.charset.StandardCharsets.UTF_8))
+                .collect(java.util.stream.Collectors.joining("&"));
+        return request("GET","/api/items/search?" + query,null,ItemPage.class);
+    }
+    public List<CategoryView> catalogCategories() {
+        return request("GET","/api/categories",null,new TypeToken<List<CategoryView>>(){}.getType());
+    }
     public UserAccount account() { return request("GET", "/api/me", null, UserAccount.class); }
     public List<AdminUserSummary> adminUsers() {
         return request("GET", "/api/admin/users", null, new TypeToken<List<AdminUserSummary>>(){}.getType());

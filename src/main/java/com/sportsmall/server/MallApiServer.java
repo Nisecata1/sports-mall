@@ -47,7 +47,7 @@ public final class MallApiServer implements AutoCloseable {
             LOG.warn("接口数据操作未完成，代码={}", problem.code());
             if (problem.code().startsWith("MONTHLY_REPORT_") || problem.code().startsWith("PROFILE_")
                     || problem.code().startsWith("CATEGORY_") || problem.code().startsWith("ADMIN_ITEM_")
-                    || problem.code().startsWith("ITEM_DETAIL_")) {
+                    || problem.code().startsWith("ITEM_DETAIL_") || problem.code().startsWith("ITEM_SEARCH_")) {
                 respond(exchange, 503, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
                 return;
             }
@@ -65,7 +65,7 @@ public final class MallApiServer implements AutoCloseable {
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.2.8", "status", "UP");
+            return Map.of("application", "sports-mall", "version", "0.2.9", "status", "UP");
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");
@@ -173,6 +173,14 @@ public final class MallApiServer implements AutoCloseable {
         if (path.equals("/api/items")) {
             requireMethod(method, "GET"); return services.browsing.availableFor(user);
         }
+        if (path.equals("/api/items/search")) {
+            requireMethod(method, "GET");
+            return services.catalog.searchFor(user, itemFilter(query(exchange,"keyword","categoryId","minPrice","maxPrice","sort","page","pageSize")));
+        }
+        if (path.equals("/api/categories")) {
+            requireMethod(method,"GET");query(exchange);
+            return services.catalog.categoriesFor(user);
+        }
         if (path.equals("/api/orders")) {
             if (method.equals("POST")) {
                 var body = body(exchange, "itemId", "quotedPrice");
@@ -272,6 +280,15 @@ public final class MallApiServer implements AutoCloseable {
             values.add(value.getAsString());
         }
         return values;
+    }
+    private static ItemFilter itemFilter(Map<String,String> values) {
+        try {
+            return new ItemFilter(values.get("keyword"),values.containsKey("categoryId") ? Long.valueOf(values.get("categoryId")) : null,
+                    values.containsKey("minPrice") ? new java.math.BigDecimal(values.get("minPrice")) : null,
+                    values.containsKey("maxPrice") ? new java.math.BigDecimal(values.get("maxPrice")) : null,
+                    values.get("sort"),values.containsKey("page") ? Integer.parseInt(values.get("page")) : 1,
+                    values.containsKey("pageSize") ? Integer.parseInt(values.get("pageSize")) : 10);
+        } catch(NumberFormatException failure) { throw invalid("商品筛选的编号、页码或价格格式不正确。"); }
     }
     private static ItemFields itemFields(JsonObject body) {
         int status;

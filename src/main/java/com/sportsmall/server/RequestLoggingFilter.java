@@ -33,6 +33,8 @@ final class RequestLoggingFilter extends Filter {
             Map.entry("/api/me/orders/monthly", "查询本人月度订单报表"),
             Map.entry("/api/me/activity", "统计本人浏览活动"),
             Map.entry("/api/items", "读取在售商品"),
+            Map.entry("/api/items/search", "筛选并分页读取在售商品"),
+            Map.entry("/api/categories", "读取商品筛选分类"),
             Map.entry("/api/orders", "处理本人订单"),
             Map.entry("/api/orders/{orderId}/cancel", "取消本人订单"),
             Map.entry("/api/items/{itemId}/comments", "处理商品评论"),
