@@ -121,6 +121,7 @@ public final class HttpIntegrationProbe {
                 checks += ItemDetailIntegrationChecks.run(address, sql, db);
                 checks += CatalogIntegrationChecks.run(address, sql, db);
                 checks += MaintenanceIntegrationChecks.run(address, sql, db);
+                checks += LogManagementIntegrationChecks.run(address, sql, db);
             }
         }
         System.out.println("INTEGRATION_CHECKS_PASSED="+checks);

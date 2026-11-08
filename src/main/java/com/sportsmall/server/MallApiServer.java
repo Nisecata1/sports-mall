@@ -43,6 +43,7 @@ public final class MallApiServer implements AutoCloseable {
                 throw new ApiProblem(401, "LOGIN_REQUIRED", "请先登录商城；登录可能已过期或后端已重启。");
             }
             Object result = route(exchange, identity);
+            auditSuccessfulWrite(exchange, identity);
             respond(exchange, 200, result);
         } catch (ApiProblem problem) {
             respond(exchange, problem.status, new ApiDtos.ErrorResponse(problem.code, problem.getMessage()));
@@ -55,7 +56,8 @@ public final class MallApiServer implements AutoCloseable {
                     || problem.code().startsWith("CATEGORY_") || problem.code().startsWith("ADMIN_ITEM_")
                     || problem.code().startsWith("ITEM_DETAIL_") || problem.code().startsWith("ITEM_SEARCH_")
                     || problem.code().startsWith("COMMENT_") || problem.code().startsWith("ADMIN_ORDER_")
-                    || problem.code().startsWith("ADMIN_USER_")) {
+                    || problem.code().startsWith("ADMIN_USER_") || problem.code().startsWith("LOG_IMPORT_")
+                    || problem.code().startsWith("SYSTEM_LOG_")) {
                 respond(exchange, 503, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
                 return;
             }
@@ -73,7 +75,7 @@ public final class MallApiServer implements AutoCloseable {
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.3.0", "status", "UP");
+            return Map.of("application", "sports-mall", "version", "0.3.1", "status", "UP");
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");
@@ -105,6 +107,21 @@ public final class MallApiServer implements AutoCloseable {
             requireMethod(method, "GET");
             query(exchange); // 不接受role或user_id等自报身份参数。
             return services.adminUsers.listUsers(user);
+        }
+        if (path.equals("/api/admin/logs")) {
+            requireMethod(method, "GET");
+            var values = query(exchange, "userId", "type", "level", "from", "through");
+            try {
+                return services.logManagement.find(user, new SystemLogFilter(
+                        values.containsKey("userId") ? Long.valueOf(values.get("userId")) : null,
+                        values.get("type"), values.get("level"),
+                        values.containsKey("from") ? LocalDate.parse(values.get("from")) : null,
+                        values.containsKey("through") ? LocalDate.parse(values.get("through")) : null));
+            } catch (NumberFormatException | DateTimeException failure) { throw invalid("日志用户编号或日期格式不正确。"); }
+        }
+        if (path.equals("/api/admin/log-imports")) {
+            requireMethod(method, "POST"); query(exchange);
+            return services.logManagement.importFile(user, text(body(exchange, "content"), "content"));
         }
         if(path.matches("/api/admin/users/[1-9][0-9]*")) {
             requireMethod(method,"PUT");query(exchange);
@@ -298,12 +315,28 @@ public final class MallApiServer implements AutoCloseable {
     private static void requireMethod(String actual, String required) {
         if (!actual.equals(required)) throw new ApiProblem(405, "METHOD_NOT_ALLOWED", "此接口不支持该请求方式。");
     }
+    private void auditSuccessfulWrite(HttpExchange exchange, RequestAuthentication.Result identity) {
+        String path = exchange.getRequestURI().getPath(), method = exchange.getRequestMethod();
+        if (!identity.authenticated() || !Set.of("POST", "PUT", "PATCH", "DELETE").contains(method)
+                || path.startsWith("/api/auth/") || path.equals("/api/browses")) return;
+        String safe = RequestLoggingFilter.safeEndpoint(path);
+        if (safe.equals("[未识别接口]")) return;
+        try {
+            services.systemLogs.recordOperation(identity.user().orElseThrow().userId(), method, path,
+                    exchange.getRemoteAddress().getAddress().getHostAddress());
+        } catch (RuntimeException failure) {
+            // 业务可能已经在另一数据库提交；审计失败不得伪装为业务回滚，也不得诱导用户重复下单。
+            LOG.warn("业务请求已完成，但MongoDB审计未确认；接口={}，异常类型={}", safe, failure.getClass().getSimpleName());
+        }
+    }
+
     private static JsonObject body(HttpExchange exchange, String... allowed) throws IOException {
         String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
         if (contentType == null || !contentType.split(";")[0].strip().equalsIgnoreCase("application/json"))
             throw new ApiProblem(415, "JSON_REQUIRED", "请求应使用JSON格式。");
-        byte[] bytes = exchange.getRequestBody().readNBytes(MAX_BODY + 1);
-        if (bytes.length > MAX_BODY) throw new ApiProblem(413, "BODY_TOO_LARGE", "请求内容过长。");
+        int limit = exchange.getRequestURI().getPath().equals("/api/admin/log-imports") ? 262144 : MAX_BODY;
+        byte[] bytes = exchange.getRequestBody().readNBytes(limit + 1);
+        if (bytes.length > limit) throw new ApiProblem(413, "BODY_TOO_LARGE", "请求内容过长。");
         try {
             JsonElement parsed = ApiJson.GSON.fromJson(new String(bytes, StandardCharsets.UTF_8), JsonElement.class);
             if (parsed == null || !parsed.isJsonObject()) throw invalid("请求应是JSON对象。");

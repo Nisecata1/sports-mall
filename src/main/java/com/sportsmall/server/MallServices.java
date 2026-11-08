@@ -31,13 +31,16 @@ public final class MallServices implements AutoCloseable {
     final CommentManagementService commentManagement;
     final AdminOrderService adminOrders;
     final AdminUserMutationService userMaintenance;
+    final AdminLogService logManagement;
+    final SystemLogDao systemLogs;
 
     public MallServices(HikariDataSource sql, MongoClient mongo, MongoDatabase database) {
         this.sql = sql; this.mongo = mongo;
         UserDao users = new UserDao(sql); ItemDao items = new ItemDao(sql);
         CommentDao commentDao = new CommentDao(database); ActionLogDao actions = new ActionLogDao(database);
         registration = new UserRegistrationService(users);
-        login = new UserLoginService(users, new SystemLogDao(database));
+        systemLogs = new SystemLogDao(database);
+        login = new UserLoginService(users, systemLogs);
         accounts = new UserAccountService(users); orders = new OrderService(accounts, new OrderDao(sql));
         comments = new CommentService(accounts, items, commentDao);
         statistics = new StatisticsService(accounts, items, commentDao, actions);
@@ -53,6 +56,7 @@ public final class MallServices implements AutoCloseable {
         commentManagement = new CommentManagementService(accounts, commentDao);
         adminOrders = new AdminOrderService(accounts, new AdminOrderDao(sql));
         userMaintenance = new AdminUserMutationService(accounts, new AdminUserMutationDao(sql));
+        logManagement = new AdminLogService(accounts, systemLogs, new LogImportDao(sql));
     }
     public static MallServices open() {
         HikariDataSource sql = DatabaseConfig.load().openDataSource();

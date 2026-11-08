@@ -22,6 +22,8 @@ final class RequestLoggingFilter extends Filter {
             Map.entry("/api/auth/logout", "退出登录"),
             Map.entry("/api/me", "读取本人账号"),
             Map.entry("/api/admin/users", "管理员读取用户列表"),
+            Map.entry("/api/admin/logs", "管理员筛选系统日志"),
+            Map.entry("/api/admin/log-imports", "管理员批量导入日志"),
             Map.entry("/api/admin/items", "管理员查看或新增商品"),
             Map.entry("/api/admin/items/{itemId}", "管理员编辑商品与上下架"),
             Map.entry("/api/admin/items/{itemId}/detail", "管理员维护商品详情"),
@@ -82,7 +84,7 @@ final class RequestLoggingFilter extends Filter {
         }
     }
 
-    private static String safeEndpoint(String path) {
+    static String safeEndpoint(String path) {
         if (OPERATIONS.containsKey(path)) {
             return path;
         }

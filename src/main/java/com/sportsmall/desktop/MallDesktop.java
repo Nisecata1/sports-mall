@@ -213,6 +213,8 @@ public final class MallDesktop extends JFrame {
             navigation.add(button("订单管理", this::showAdminOrders));
             navigation.add(Box.createVerticalStrut(12));
             navigation.add(button("评论管理", () -> showManagedComments(true)));
+            navigation.add(Box.createVerticalStrut(12));
+            navigation.add(button("系统日志", () -> showSystemLogs(SystemLogFilter.all())));
         }
         JScrollPane menuScroll=new JScrollPane(navigation);
         menuScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
@@ -756,6 +758,72 @@ public final class MallDesktop extends JFrame {
 
     private record CategoryParentChoice(Long id, String label) {
         @Override public String toString() { return label; }
+    }
+
+    private void showSystemLogs(SystemLogFilter filter) {
+        task("正在读取系统日志", () -> api.systemLogs(filter), logs -> {
+            JPanel page = page("系统日志", "按条件显示最新200条；日期按北京时间；导入演示记录标记为IMPORT");
+            JTextField user = named(new JTextField(filter.userId() == null ? "" : filter.userId().toString(), 7), "日志用户编号");
+            JComboBox<String> type = named(new JComboBox<>(new String[]{"全部", "LOGIN", "OPERATION", "IMPORT"}), "日志类型");
+            type.setSelectedItem(filter.type() == null ? "全部" : filter.type());
+            JComboBox<String> level = named(new JComboBox<>(new String[]{"全部", "INFO", "WARN", "ERROR"}), "日志级别");
+            level.setSelectedItem(filter.level() == null ? "全部" : filter.level());
+            JTextField from = named(new JTextField(filter.from() == null ? "" : filter.from().toString(), 10), "日志开始日期");
+            JTextField through = named(new JTextField(filter.through() == null ? "" : filter.through().toString(), 10), "日志结束日期");
+            JPanel filters = column();
+            JPanel first = row(); first.add(new JLabel("用户编号")); first.add(user); first.add(type); first.add(level);
+            JPanel dates = row(); dates.add(new JLabel("日期")); dates.add(from); dates.add(new JLabel("至")); dates.add(through);
+            dates.add(button("查询", () -> {
+                try {
+                    showSystemLogs(new SystemLogFilter(user.getText().isBlank() ? null : Long.valueOf(user.getText().strip()),
+                            type.getSelectedIndex() == 0 ? null : (String) type.getSelectedItem(),
+                            level.getSelectedIndex() == 0 ? null : (String) level.getSelectedItem(),
+                            from.getText().isBlank() ? null : LocalDate.parse(from.getText().strip()),
+                            through.getText().isBlank() ? null : LocalDate.parse(through.getText().strip())));
+                } catch (NumberFormatException | DateTimeParseException failure) { message("用户编号请输入正整数；日期使用YYYY-MM-DD。"); }
+                catch (MallBusinessException failure) { message(failure.getMessage()); }
+            }));
+            dates.add(button("清除条件", () -> showSystemLogs(SystemLogFilter.all())));
+            filters.add(first); filters.add(dates);
+            JTable table = dataTable("系统日志列表", new String[]{"时间", "用户编号", "类型", "级别", "说明", "操作"},
+                    logs.stream().map(log -> new Object[]{time(log.timestamp()), log.userId(), log.type(), log.level(), log.message(), log.operation()}).toList());
+            JPanel content = new JPanel(new BorderLayout(0, 8)); content.setBackground(Color.WHITE);
+            content.add(filters, BorderLayout.NORTH); content.add(new JScrollPane(table), BorderLayout.CENTER);
+            page.add(content, BorderLayout.CENTER);
+            JPanel actions = row();
+            actions.add(button("查看日志详情", () -> selected(table, logs, log -> JOptionPane.showMessageDialog(this, scrollText("日志编号：" + log.logId()
+                    + "\n时间：" + time(log.timestamp()) + "\n用户编号：" + log.userId() + "\n类型：" + log.type()
+                    + "\n级别：" + log.level() + "\n操作：" + log.operation() + "\n说明：" + log.message(), 14, 60), "日志详情", JOptionPane.INFORMATION_MESSAGE))));
+            actions.add(button("导入JSONL日志", this::importLogs));
+            actions.add(note("显示" + logs.size() + "条；只读查询，不修改历史日志。"));
+            page.add(actions, BorderLayout.SOUTH); display(page);
+        });
+    }
+
+    private void importLogs() {
+        JFileChooser chooser = named(new JFileChooser(System.getProperty("user.dir")), "日志文件选择");
+        chooser.setDialogTitle("选择UTF-8 JSONL日志（每行一条，最多200条、64KiB）");
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("JSONL日志文件", "jsonl"));
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        var path = chooser.getSelectedFile().toPath();
+        String text;
+        try {
+            // 限量读取，不能只依靠读取前的文件大小检查。
+            byte[] bytes;
+            try (var input = java.nio.file.Files.newInputStream(path)) { bytes = input.readNBytes(65537); }
+            if (bytes.length > 65536) { message("文件超过64KiB，请拆成多批。"); return; }
+            text = java.nio.charset.StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+        } catch (java.io.IOException failure) { message("文件读取失败，请选择UTF-8编码的JSONL文件。"); return; }
+        if (JOptionPane.showConfirmDialog(this, "导入“" + path.getFileName() + "”？\n"
+                + "先批量保存到MySQL暂存表，再同步MongoDB。记录标记为IMPORT。\n"
+                + "同一管理员重复导入相同内容会继续同步当前批次。",
+                "确认日志导入", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+        task("正在批量导入日志", () -> api.importLogs(text), result -> {
+            message("批次：" + result.batchId() + "\n暂存：" + result.total() + "条\n已确认同步：" + result.synced()
+                    + "条\n待同步：" + result.pending() + "条"
+                    + (result.pending() == 0 ? "\n本批同步完成。" : "\n保留原文件，恢复数据库后重新导入同一文件继续。"));
+            showSystemLogs(new SystemLogFilter(null, "IMPORT", null, null, null));
+        });
     }
 
     private void showAdminUsers() {

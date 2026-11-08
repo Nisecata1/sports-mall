@@ -11,6 +11,15 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SystemLogDaoTest {
+    @Test void businessAuditContainsIdentityAndRouteButNoRequestPayload() {
+        var log = SystemLogDao.operationDocument(7, "PUT", "/api/admin/items/9", "127.0.0.1", Instant.EPOCH);
+        assertEquals("OPERATION",log.getString("log_type"));
+        var detail = log.get("action_detail",Document.class);
+        assertEquals("PUT /api/admin/items/9",detail.getString("operation"));
+        assertEquals("HTTP_BACKEND",detail.getString("source"));
+        assertEquals(Set.of("ip","operation","source","http_status"),detail.keySet());
+        assertFalse(log.toJson().contains("password"));
+    }
     @Test
     void successLogUsesBsonLongDateAndNestedOperationWithoutCredentials() {
         Instant now = Instant.parse("2026-10-31T08:00:00Z");

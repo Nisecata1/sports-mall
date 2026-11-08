@@ -44,7 +44,7 @@ try:
     mysqlp=launch([mysqlbase/"bin/mysqld.exe","--no-defaults","--console","--basedir="+str(mysqlbase),"--datadir="+str(sqldata),"--port="+str(sqlport),"--bind-address=127.0.0.1","--mysqlx=OFF"],"mysql-server.log")
     mongop=launch([mongobase/"server/bin/mongod.exe","--dbpath="+str(mongodata),"--port="+str(mongoport),"--bind_ip=127.0.0.1"],"mongo-server.log")
     wait_port(sqlport,mysqlp); wait_port(mongoport,mongop)
-    for f in ["mysql_schema.sql","mysql_views.sql","mysql_procedures.sql","mysql_triggers.sql"]:
+    for f in ["mysql_schema.sql","mysql_log_import.sql","mysql_views.sql","mysql_procedures.sql","mysql_triggers.sql"]:
         run(mysql,input=(repo/"src/main/resources/sql"/f).read_bytes(),log=f+".log")
     salt=b"0123456789ABCDEF"
     digest=hashlib.pbkdf2_hmac("sha256",b"synthetic-integration-password",salt,600000)
@@ -57,6 +57,7 @@ INSERT INTO items(title,category_id,price,status) VALUES('训练篮球',1,100.00
     run(mysql,input=fixture.encode("utf-8"),log="mysql-fixtures.log")
     run(shell+["--file",repo/"src/main/resources/sql/mongodb_init.js"],log="mongo-fixtures.log")
     run(shell+["--file",repo/"src/main/resources/sql/mongodb_comment_indexes.js"],log="mongo-comment-indexes.log")
+    run(shell+["--file",repo/"src/main/resources/sql/mongodb_log_indexes.js"],log="mongo-log-indexes.log")
     classpath=str(repo/"target/test-classes")+os.pathsep+str(repo/"target"/f"sports-mall-{version}.jar")
     output=run([java,"-Dfile.encoding=UTF-8","-Dstdout.encoding=UTF-8","-Dstderr.encoding=UTF-8",
         "-Dmall.desktop.jar="+str(repo/"target"/f"sports-mall-{version}-desktop.jar"),

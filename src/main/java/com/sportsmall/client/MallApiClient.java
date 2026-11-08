@@ -61,6 +61,19 @@ public final class MallApiClient {
     public List<AdminUserSummary> adminUsers() {
         return request("GET", "/api/admin/users", null, new TypeToken<List<AdminUserSummary>>(){}.getType());
     }
+    public List<SystemLogView> systemLogs(SystemLogFilter filter) {
+        List<String> fields = new ArrayList<>();
+        if (filter.userId() != null) fields.add("userId=" + filter.userId());
+        if (filter.type() != null) fields.add("type=" + filter.type());
+        if (filter.level() != null) fields.add("level=" + filter.level());
+        if (filter.from() != null) fields.add("from=" + filter.from());
+        if (filter.through() != null) fields.add("through=" + filter.through());
+        return request("GET", "/api/admin/logs" + (fields.isEmpty() ? "" : "?" + String.join("&", fields)),
+                null, new TypeToken<List<SystemLogView>>(){}.getType());
+    }
+    public LogImportResult importLogs(String content) {
+        return request("POST", "/api/admin/log-imports", Map.of("content", content), LogImportResult.class);
+    }
     public List<AdminItemView> adminItems() {
         return request("GET", "/api/admin/items", null, new TypeToken<List<AdminItemView>>(){}.getType());
     }
