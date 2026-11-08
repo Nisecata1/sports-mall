@@ -32,6 +32,13 @@ final class RequestLoggingFilter extends Filter {
             Map.entry("/api/me/profile", "维护本人档案"),
             Map.entry("/api/me/orders/monthly", "查询本人月度订单报表"),
             Map.entry("/api/me/activity", "统计本人浏览活动"),
+            Map.entry("/api/me/comments", "查看本人评论"),
+            Map.entry("/api/me/comments/{commentId}", "修改或删除本人评论"),
+            Map.entry("/api/admin/comments", "管理员查看评论"),
+            Map.entry("/api/admin/comments/{commentId}", "管理员删除评论"),
+            Map.entry("/api/admin/users/{userId}", "管理员维护账号角色与状态"),
+            Map.entry("/api/admin/orders", "管理员筛选订单"),
+            Map.entry("/api/admin/orders/{orderId}/status", "管理员处理待处理订单"),
             Map.entry("/api/items", "读取在售商品"),
             Map.entry("/api/items/search", "筛选并分页读取在售商品"),
             Map.entry("/api/categories", "读取商品筛选分类"),
@@ -79,6 +86,10 @@ final class RequestLoggingFilter extends Filter {
         if (OPERATIONS.containsKey(path)) {
             return path;
         }
+        if(path.matches("/api/(me|admin)/comments/[0-9a-fA-F]{24}"))
+            return path.replaceFirst("/[0-9a-fA-F]{24}$","/{commentId}");
+        if(path.matches("/api/admin/users/[1-9][0-9]*"))return "/api/admin/users/{userId}";
+        if(path.matches("/api/admin/orders/[1-9][0-9]*/status"))return "/api/admin/orders/{orderId}/status";
         if (path.matches("/api/orders/[1-9][0-9]*/cancel")) {
             return "/api/orders/{orderId}/cancel";
         }

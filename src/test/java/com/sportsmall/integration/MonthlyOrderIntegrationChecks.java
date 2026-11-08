@@ -76,8 +76,16 @@ final class MonthlyOrderIntegrationChecks {
              var rows = statement.executeQuery()) {
             check(rows.next() && rows.getInt(1) == 2, "both course procedures installed with invoker security");
         }
-        try (Connection connection = sql.getConnection(); Statement statement = connection.createStatement()) {
-            statement.execute("DROP PROCEDURE sp_monthly_order_report");
+        String savedDefinition;
+        try (Connection connection = sql.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SHOW CREATE PROCEDURE sp_monthly_order_report");
+             var row = statement.executeQuery()) {
+            if(!row.next())throw new AssertionError("Monthly procedure fixture missing");
+            savedDefinition=row.getString("Create Procedure");
+        }
+        try (Connection connection = sql.getConnection();
+             PreparedStatement statement = connection.prepareStatement("DROP PROCEDURE sp_monthly_order_report")) {
+            statement.execute();
         }
         try {
             owner.monthlyOrders("2024-02");
@@ -85,6 +93,11 @@ final class MonthlyOrderIntegrationChecks {
         } catch (ApiException failure) {
             check(failure.status() == 503 && failure.code().equals("MONTHLY_REPORT_ROUTINE_NOT_FOUND"),
                     "missing procedure is reported without fake empty success");
+        } finally {
+            // 故障注入结束后恢复临时实例，后续业务检查仍需使用真实月报过程。
+            try(Connection connection=sql.getConnection();PreparedStatement statement=connection.prepareStatement(savedDefinition)) {
+                statement.execute();
+            }
         }
         other.logout();
         owner.logout();

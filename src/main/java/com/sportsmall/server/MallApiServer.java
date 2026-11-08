@@ -18,10 +18,12 @@ import java.util.concurrent.*;
 public final class MallApiServer implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(MallApiServer.class);
     private static final int MAX_BODY = 32768;
+    private static final Set<String> PUBLIC_API_PATHS = Set.of("/api/health", "/api/auth/login", "/api/auth/register");
     private final HttpServer server;
     private final ExecutorService executor;
     private final MallServices services;
     private final SessionStore sessions = new SessionStore();
+    private final RequestAuthentication authentication = new RequestAuthentication(sessions);
 
     public MallApiServer(MallServices services, int port) throws IOException {
         this.services = Objects.requireNonNull(services);
@@ -36,7 +38,11 @@ public final class MallApiServer implements AutoCloseable {
 
     private void handle(HttpExchange exchange) throws IOException {
         try {
-            Object result = route(exchange);
+            var identity = authentication.resolve(exchange.getRequestHeaders().getFirst("Authorization"));
+            if (requiresLogin(exchange.getRequestURI().getPath()) && !identity.authenticated()) {
+                throw new ApiProblem(401, "LOGIN_REQUIRED", "请先登录商城；登录可能已过期或后端已重启。");
+            }
+            Object result = route(exchange, identity);
             respond(exchange, 200, result);
         } catch (ApiProblem problem) {
             respond(exchange, problem.status, new ApiDtos.ErrorResponse(problem.code, problem.getMessage()));
@@ -47,7 +53,9 @@ public final class MallApiServer implements AutoCloseable {
             LOG.warn("接口数据操作未完成，代码={}", problem.code());
             if (problem.code().startsWith("MONTHLY_REPORT_") || problem.code().startsWith("PROFILE_")
                     || problem.code().startsWith("CATEGORY_") || problem.code().startsWith("ADMIN_ITEM_")
-                    || problem.code().startsWith("ITEM_DETAIL_") || problem.code().startsWith("ITEM_SEARCH_")) {
+                    || problem.code().startsWith("ITEM_DETAIL_") || problem.code().startsWith("ITEM_SEARCH_")
+                    || problem.code().startsWith("COMMENT_") || problem.code().startsWith("ADMIN_ORDER_")
+                    || problem.code().startsWith("ADMIN_USER_")) {
                 respond(exchange, 503, new ApiDtos.ErrorResponse(problem.code(), problem.getMessage()));
                 return;
             }
@@ -60,12 +68,12 @@ public final class MallApiServer implements AutoCloseable {
         } finally { exchange.close(); }
     }
 
-    private Object route(HttpExchange exchange) throws IOException {
+    private Object route(HttpExchange exchange, RequestAuthentication.Result identity) throws IOException {
         String path = exchange.getRequestURI().getPath();
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.2.9", "status", "UP");
+            return Map.of("application", "sports-mall", "version", "0.3.0", "status", "UP");
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");
@@ -84,12 +92,11 @@ public final class MallApiServer implements AutoCloseable {
             finally { Arrays.fill(password, '\0'); Arrays.fill(confirmation, '\0'); body.remove("password"); body.remove("confirmation"); }
         }
         if (!path.startsWith("/api/")) throw new ApiProblem(404, "NOT_FOUND", "接口不存在。");
-        String token = token(exchange);
-        var session = sessions.require(token);
+        var session = identity.session().orElseThrow(() -> new IllegalStateException("受保护路由缺少入口已确认的会话。"));
         var user = session.user; // 身份只来自后端会话，从不读取请求中的user_id或role。
         if (path.equals("/api/auth/logout")) {
             requireMethod(method, "POST"); body(exchange);
-            sessions.remove(token); return Map.of("loggedOut", true);
+            sessions.remove(identity.token()); return Map.of("loggedOut", true);
         }
         if (path.equals("/api/me")) {
             requireMethod(method, "GET"); return services.accounts.viewMyAccount(user);
@@ -98,6 +105,54 @@ public final class MallApiServer implements AutoCloseable {
             requireMethod(method, "GET");
             query(exchange); // 不接受role或user_id等自报身份参数。
             return services.adminUsers.listUsers(user);
+        }
+        if(path.matches("/api/admin/users/[1-9][0-9]*")) {
+            requireMethod(method,"PUT");query(exchange);
+            var fields=body(exchange,"role","status");
+            int status;
+            try { status=decimal(fields,"status").intValueExact(); }
+            catch(ArithmeticException failure) { throw invalid("账号状态须为0或1。"); }
+            return services.userMaintenance.update(user,idSegment(path,4),text(fields,"role"),status);
+        }
+        if(path.equals("/api/admin/orders")) {
+            requireMethod(method,"GET");
+            var values=query(exchange,"userId","status","from","through");
+            try {
+                return services.adminOrders.find(user,values.containsKey("userId") ? Long.valueOf(values.get("userId")) : null,
+                        new OrderFilter(values.containsKey("status") ? Integer.valueOf(values.get("status")) : null,
+                                values.containsKey("from") ? LocalDate.parse(values.get("from")) : null,
+                                values.containsKey("through") ? LocalDate.parse(values.get("through")) : null));
+            } catch(NumberFormatException | DateTimeException failure) { throw invalid("用户编号、订单状态或日期格式不正确。"); }
+        }
+        if(path.matches("/api/admin/orders/[1-9][0-9]*/status")) {
+            requireMethod(method,"PUT");query(exchange);
+            var fields=body(exchange,"status");
+            int status;
+            try { status=decimal(fields,"status").intValueExact(); }
+            catch(ArithmeticException failure) { throw invalid("订单目标状态须为1或2。"); }
+            return services.adminOrders.changeStatus(user,idSegment(path,4),status);
+        }
+        if(path.equals("/api/me/comments")) {
+            requireMethod(method,"GET");query(exchange);return services.commentManagement.mine(user);
+        }
+        if(path.matches("/api/me/comments/[0-9a-fA-F]{24}")) {
+            query(exchange);String id=path.split("/")[4];
+            if(method.equals("PUT")) {
+                var fields=body(exchange,"content","rating","tags");
+                int rating;
+                try { rating=decimal(fields,"rating").intValueExact(); }
+                catch(ArithmeticException failure) { throw invalid("评分须为整数。"); }
+                return services.commentManagement.updateMine(user,id,text(fields,"content"),rating,text(fields,"tags"));
+            }
+            requireMethod(method,"DELETE");body(exchange);
+            return Map.of("deleted",services.commentManagement.deleteMine(user,id));
+        }
+        if(path.equals("/api/admin/comments")) {
+            requireMethod(method,"GET");query(exchange);return services.commentManagement.all(user);
+        }
+        if(path.matches("/api/admin/comments/[0-9a-fA-F]{24}")) {
+            requireMethod(method,"DELETE");query(exchange);body(exchange);
+            return Map.of("deleted",services.commentManagement.deleteAsAdmin(user,path.split("/")[4]));
         }
         if (path.equals("/api/admin/items")) {
             query(exchange);
@@ -237,9 +292,8 @@ public final class MallApiServer implements AutoCloseable {
         throw new ApiProblem(404, "NOT_FOUND", "接口不存在。");
     }
 
-    private static String token(HttpExchange exchange) {
-        String header = exchange.getRequestHeaders().getFirst("Authorization");
-        return header != null && header.matches("Bearer [A-Za-z0-9_-]{43}") ? header.substring(7) : null;
+    static boolean requiresLogin(String path) {
+        return path.startsWith("/api/") && !PUBLIC_API_PATHS.contains(path);
     }
     private static void requireMethod(String actual, String required) {
         if (!actual.equals(required)) throw new ApiProblem(405, "METHOD_NOT_ALLOWED", "此接口不支持该请求方式。");

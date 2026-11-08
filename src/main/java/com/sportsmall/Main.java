@@ -48,8 +48,8 @@ public final class Main {
         } else {
             System.out.println("商城窗口：双击 Start-Mall.vbs");
             System.out.println("业务后端：在 PowerShell 7 运行 .\\Start-Backend.ps1");
-            System.out.println("历史注册入口：java -cp .\\target\\sports-mall-0.2.9.jar com.sportsmall.Main register");
-            System.out.println("历史登录入口：java -cp .\\target\\sports-mall-0.2.9.jar com.sportsmall.Main login");
+            System.out.println("历史注册入口：java -cp .\\target\\sports-mall-0.3.0.jar com.sportsmall.Main register");
+            System.out.println("历史登录入口：java -cp .\\target\\sports-mall-0.3.0.jar com.sportsmall.Main login");
             exitCode = args.length == 1 && ("help".equals(args[0]) || "--help".equals(args[0])) ? 0 : 1;
         }
         if (exitCode != 0) {

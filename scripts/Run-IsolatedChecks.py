@@ -56,6 +56,7 @@ INSERT INTO items(title,category_id,price,status) VALUES('训练篮球',1,100.00
 """
     run(mysql,input=fixture.encode("utf-8"),log="mysql-fixtures.log")
     run(shell+["--file",repo/"src/main/resources/sql/mongodb_init.js"],log="mongo-fixtures.log")
+    run(shell+["--file",repo/"src/main/resources/sql/mongodb_comment_indexes.js"],log="mongo-comment-indexes.log")
     classpath=str(repo/"target/test-classes")+os.pathsep+str(repo/"target"/f"sports-mall-{version}.jar")
     output=run([java,"-Dfile.encoding=UTF-8","-Dstdout.encoding=UTF-8","-Dstderr.encoding=UTF-8",
         "-Dmall.desktop.jar="+str(repo/"target"/f"sports-mall-{version}-desktop.jar"),

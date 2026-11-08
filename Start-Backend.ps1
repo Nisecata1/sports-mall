@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
 $mallProject = $PSScriptRoot
-$mallBackendJar = Join-Path $mallProject 'target\sports-mall-0.2.9.jar'
+$mallBackendJar = Join-Path $mallProject 'target\sports-mall-0.3.0.jar'
 if (-not (Test-Path -LiteralPath $mallBackendJar)) {
     throw '请先在项目目录执行 .\mvnw.cmd package，生成后端程序。'
 }

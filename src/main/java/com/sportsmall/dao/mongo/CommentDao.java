@@ -7,6 +7,9 @@ import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.result.InsertOneResult;
 import com.sportsmall.exception.MallDataAccessException;
+import com.sportsmall.exception.MallBusinessException;
+import com.mongodb.client.model.FindOneAndUpdateOptions;
+import com.mongodb.client.model.ReturnDocument;
 import com.sportsmall.model.CommentStatistics;
 import com.sportsmall.model.CommentView;
 import org.bson.Document;
@@ -19,6 +22,7 @@ import java.util.List;
 import java.util.Objects;
 
 import static com.mongodb.client.model.Filters.eq;
+import static com.mongodb.client.model.Filters.and;
 import static com.mongodb.client.model.Sorts.descending;
 
 /** 评论独立写入MongoDB；MySQL引用是否存在由调用前的业务层检查。 */
@@ -70,6 +74,45 @@ public final class CommentDao {
             return result == null ? CommentStatistics.empty(itemId) : mapStatistics(result, itemId);
         } catch (MongoException exception) {
             throw new MallDataAccessException("COMMENT_STATISTICS_FAILED", "无法完成评论统计，请检查MongoDB连接与comments集合。");
+        }
+    }
+
+    public List<CommentView> findByUserId(long userId) {
+        return managementList(eq("user_id",userId));
+    }
+    public List<CommentView> findForManagement() {
+        return managementList(new Document());
+    }
+    private List<CommentView> managementList(org.bson.conversions.Bson filter) {
+        try(var rows=collection.find(filter).sort(descending("created_at","_id")).limit(100).iterator()) {
+            List<CommentView> result=new ArrayList<>();
+            while(rows.hasNext())result.add(mapDocument(rows.next()));
+            return List.copyOf(result);
+        } catch(MongoException failure) {
+            throw new MallDataAccessException("COMMENT_QUERY_FAILED","无法读取评论维护列表，请检查MongoDB连接。");
+        }
+    }
+    public CommentView updateOwned(long owner,String id,String content,int rating,List<String> tags) {
+        try {
+            // 所属用户与文档编号在同一个写入条件中检查，不使用upsert、不覆盖整份文档。
+            Document result=collection.findOneAndUpdate(and(eq("_id",new ObjectId(id)),eq("user_id",owner)),
+                    new Document("$set",new Document("content",content).append("rating",rating)
+                            .append("tags",new ArrayList<>(tags)).append("updated_at",new Date())),
+                    new FindOneAndUpdateOptions().returnDocument(ReturnDocument.AFTER));
+            if(result==null)throw new MallBusinessException("COMMENT_NOT_FOUND","该评论已不存在或不属于当前账号，请刷新我的评论。");
+            return mapDocument(result);
+        } catch(MongoException failure) {
+            throw new MallDataAccessException("COMMENT_UPDATE_UNCONFIRMED","评论修改结果未确认，请刷新我的评论后再决定是否重试。");
+        }
+    }
+    public boolean delete(String id,Long owner) {
+        try {
+            var filter=owner==null ? eq("_id",new ObjectId(id)) : and(eq("_id",new ObjectId(id)),eq("user_id",owner));
+            var result=collection.deleteOne(filter);
+            if(!result.wasAcknowledged())throw new MongoException("Unacknowledged comment deletion");
+            return result.getDeletedCount()==1;
+        } catch(MongoException failure) {
+            throw new MallDataAccessException("COMMENT_DELETE_UNCONFIRMED","评论删除结果未确认，请刷新评论列表后再决定是否重试。");
         }
     }
 

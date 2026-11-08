@@ -22,13 +22,13 @@ final class SessionStore {
         sessions.put(token, new Session(user, clock.instant().plus(lifetime)));
         return token;
     }
-    Session require(String token) {
+    Optional<Session> find(String token) {
         Session session = token == null ? null : sessions.get(token);
         if (session == null || !session.expires.isAfter(clock.instant())) {
-            if (token != null) sessions.remove(token);
-            throw new ApiProblem(401, "LOGIN_REQUIRED", "请先登录商城；登录可能已过期或后端已重启。");
+            if (session != null) sessions.remove(token, session);
+            return Optional.empty();
         }
-        return session;
+        return Optional.of(session);
     }
     void remove(String token) { if (token != null) sessions.remove(token); }
     private String randomId() { byte[] bytes = new byte[32]; random.nextBytes(bytes); return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes); }

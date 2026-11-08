@@ -75,7 +75,7 @@ public final class CommentService {
         }
     }
 
-    private static List<String> normalizeTags(String input) {
+    static List<String> normalizeTags(String input) {
         List<String> tags = input == null || input.isBlank() ? List.of()
                 : Arrays.stream(input.split("[,，]"))
                         .map(String::strip).filter(tag -> !tag.isEmpty()).distinct().toList();

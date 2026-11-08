@@ -209,8 +209,15 @@ public final class MallDesktop extends JFrame {
             navigation.add(button("分类管理", this::showCategories));
             navigation.add(Box.createVerticalStrut(12));
             navigation.add(button("商品管理", this::showAdminItems));
+            navigation.add(Box.createVerticalStrut(12));
+            navigation.add(button("订单管理", this::showAdminOrders));
+            navigation.add(Box.createVerticalStrut(12));
+            navigation.add(button("评论管理", () -> showManagedComments(true)));
         }
-        body.add(navigation, BorderLayout.WEST);
+        JScrollPane menuScroll=new JScrollPane(navigation);
+        menuScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        menuScroll.setBorder(null);menuScroll.setPreferredSize(new Dimension(185,0));
+        body.add(menuScroll, BorderLayout.WEST);
         workspace = new JPanel(new BorderLayout());
         workspace.setBorder(new EmptyBorder(22, 14, 20, 28));
         workspace.setBackground(BACKGROUND);
@@ -368,6 +375,7 @@ public final class MallDesktop extends JFrame {
                                 time(comment.createdAt())}).toList()));
             };
             filters.add(button("刷新评论", query));
+            filters.add(button("我的评论／修改删除", () -> showManagedComments(false)));
             filters.add(button("发表评论", () -> {
                 ItemChoice item = (ItemChoice) choice.getSelectedItem();
                 if (item != null) postComment(item.item, query); else message("当前没有可评论商品。");
@@ -393,6 +401,83 @@ public final class MallDesktop extends JFrame {
         int score = (Integer) rating.getValue();
         task("正在保存评论", () -> api.postComment(item.itemId(), text, score, tagText),
                 saved -> { message("评论已保存。\n评论编号：" + saved.commentId()); refresh.run(); });
+    }
+
+    private void showManagedComments(boolean administrator) {
+        task("正在读取评论维护列表", () -> administrator ? api.adminComments() : api.myComments(), comments -> {
+            JPanel page=page(administrator ? "评论管理" : "我的评论",
+                    "按创建时间显示最新100条，含已下架商品；商品编号用于关联原商品");
+            JTable table=dataTable("评论维护列表",new String[]{"评论编号","作者编号","商品编号","评分","内容","标签","创建时间"},
+                    comments.stream().map(c->new Object[]{c.commentId(),c.userId(),c.itemId(),c.rating(),c.content(),
+                            String.join("，",c.tags()),time(c.createdAt())}).toList());
+            page.add(new JScrollPane(table),BorderLayout.CENTER);
+            JPanel actions=row();
+            actions.add(button("刷新评论列表",()->showManagedComments(administrator)));
+            if(!administrator)actions.add(button("编辑选中评论",()->selected(table,comments,this::editMyComment)));
+            actions.add(button("删除选中评论",()->selected(table,comments,c->{
+                if(!confirm("删除评论"+c.commentId()+"？此操作会删除这条评论，并影响评论统计。"))return;
+                task("正在删除评论",()->api.deleteComment(c.commentId(),administrator),deleted->{
+                    message(deleted ? "评论已删除。" : "未删除：评论已不存在或不属于当前账号。");
+                    showManagedComments(administrator);
+                });
+            })));
+            if(administrator)actions.add(note("管理员可删除评论，不代替原作者修改内容。"));
+            page.add(actions,BorderLayout.SOUTH);display(page);
+        });
+    }
+    private void editMyComment(CommentView comment) {
+        JPanel form=column();
+        JTextArea content=named(new JTextArea(comment.content(),7,36),"修改评论文字");
+        content.setLineWrap(true);content.setWrapStyleWord(true);
+        JSpinner rating=named(new JSpinner(new SpinnerNumberModel(comment.rating(),1,5,1)),"修改评论评分");
+        JTextField tags=named(new JTextField(String.join("，",comment.tags()),28),"修改评论标签");
+        addField(form,"评分（1至5）",rating);addField(form,"文字（最多2000字符）",new JScrollPane(content));
+        addField(form,"标签（逗号分隔，最多5个）",tags);
+        if(JOptionPane.showConfirmDialog(this,form,"编辑本人的评论",JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE)!=JOptionPane.OK_OPTION)return;
+        String text=content.getText(),tagText=tags.getText();int score=(Integer)rating.getValue();
+        task("正在修改评论",()->api.updateComment(comment.commentId(),text,score,tagText),
+                saved->{message("评论已修改，作者和创建时间保持原值。");showManagedComments(false);});
+    }
+
+    private void showAdminOrders() {
+        JPanel page=page("订单管理","查询全部用户订单；只允许待处理订单完成或取消，保留历史金额");
+        JTextField userId=named(new JTextField(7),"管理订单用户编号");
+        JComboBox<String> states=named(new JComboBox<>(new String[]{"全部状态","待处理","已完成","已取消"}),"管理订单状态");
+        JTextField from=named(new JTextField(10),"管理订单开始日期");
+        JTextField through=named(new JTextField(10),"管理订单结束日期");
+        from.setToolTipText("YYYY-MM-DD，留空不限");through.setToolTipText("YYYY-MM-DD，包含当天，留空不限");
+        JPanel filters=row();filters.add(new JLabel("用户编号"));filters.add(userId);filters.add(states);
+        filters.add(new JLabel("日期"));filters.add(from);filters.add(new JLabel("至"));filters.add(through);
+        ((JPanel)page.getComponent(0)).add(filters);
+        JTable table=dataTable("管理订单列表",new String[]{"订单编号","用户编号","商品编号","商品","金额","状态","创建时间"},List.of());
+        page.add(new JScrollPane(table),BorderLayout.CENTER);
+        final List<OrderView>[] rows=orderHolder();
+        Runnable query=()->{
+            try {
+                Long owner=userId.getText().isBlank() ? null : Long.valueOf(userId.getText().strip());
+                var filter=new OrderFilter(states.getSelectedIndex()==0 ? null : states.getSelectedIndex()-1,
+                        date(from.getText()),date(through.getText()));
+                task("正在查询管理订单",()->api.adminOrders(owner,filter),found->{
+                    rows[0]=found;fill(table,found.stream().map(o->new Object[]{o.orderId(),o.userId(),o.itemId(),o.itemTitle(),
+                            money(o.amount()),orderStatus(o.status()),TIME.format(o.createdAt())}).toList());
+                    status.setText("显示符合条件的最新"+found.size()+"条订单，最多200条。");
+                });
+            } catch(NumberFormatException failure) { message("用户编号须输入正整数，留空不限。"); }
+            catch(RuntimeException failure) { showFailure(failure); }
+        };
+        filters.add(button("查询",query));
+        JPanel actions=row();
+        actions.add(button("完成选中订单",()->selected(table,rows[0],o->processAdminOrder(o,1,query))));
+        actions.add(button("取消选中订单",()->selected(table,rows[0],o->processAdminOrder(o,2,query))));
+        actions.add(note("最新200条；结束日期包含当天。"));page.add(actions,BorderLayout.SOUTH);display(page);query.run();
+    }
+    private void processAdminOrder(OrderView order,int state,Runnable refresh) {
+        if(order.status()!=0) { message("只能处理待处理订单，已完成或已取消的订单不能再次变更。");return; }
+        if(!confirm("将订单"+order.orderId()+"设为"+orderStatus(state)+"？"))return;
+        task("正在处理订单",()->api.processOrder(order.orderId(),state),saved->{
+            message("订单"+saved.orderId()+"已"+(state==1 ? "完成" : "取消")+"。");refresh.run();
+        });
     }
 
     private void showStatistics() {
@@ -675,16 +760,33 @@ public final class MallDesktop extends JFrame {
 
     private void showAdminUsers() {
         task("正在读取用户列表", () -> api.adminUsers(), users -> {
-            JPanel page = page("用户管理", "查看账号角色与状态");
+            JPanel page = page("用户管理", "查看账号，调整角色与启停状态；保留关联订单和档案");
             JTable table = dataTable("用户列表", new String[]{"用户编号", "用户名", "角色", "状态"},
                     users.stream().map(user -> new Object[]{user.userId(), user.username(), user.role(),
                             user.status() == 1 ? "正常" : "停用"}).toList());
             page.add(new JScrollPane(table), BorderLayout.CENTER);
             JPanel actions = row();
             actions.add(button("刷新用户列表", this::showAdminUsers));
+            actions.add(button("修改角色／启停", () -> selected(table,users,this::editManagedUser)));
             actions.add(note("显示前100个账号，按用户编号排序。"));
             page.add(actions, BorderLayout.SOUTH);
             display(page);
+        });
+    }
+
+    private void editManagedUser(AdminUserSummary user) {
+        JPanel form=column();
+        JComboBox<String> role=named(new JComboBox<>(new String[]{"USER","ADMIN"}),"管理用户角色");
+        role.setSelectedItem(user.role());
+        JComboBox<String> state=named(new JComboBox<>(new String[]{"停用","启用"}),"管理用户状态");
+        state.setSelectedIndex(user.status()==1 ? 1 : 0);
+        addField(form,"账号："+user.username()+"（编号"+user.userId()+"）",new JLabel("角色和状态由后端校验"));
+        addField(form,"角色",role);addField(form,"状态",state);
+        if(JOptionPane.showConfirmDialog(this,form,"维护账号",JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE)!=JOptionPane.OK_OPTION)return;
+        String targetRole=(String)role.getSelectedItem();int targetState=state.getSelectedIndex();
+        task("正在维护用户",()->api.updateUser(user.userId(),targetRole,targetState),saved->{
+            message("账号已保存。角色和状态会影响后续请求；导航角色变化请重新登录。");showAdminUsers();
         });
     }
 

@@ -27,6 +27,14 @@
         { item_id: 1, created_at: -1, _id: -1 },
         { name: "idx_comments_item_time" }
     );
+    mallDb.comments.createIndex(
+        { user_id: 1, created_at: -1, _id: -1 },
+        { name: "idx_comments_user_time" }
+    );
+    mallDb.comments.createIndex(
+        { created_at: -1, _id: -1 },
+        { name: "idx_comments_time" }
+    );
 
     // 行为日志：时间窗口内统计热度；按某用户及时间查询活动。
     mallDb.action_logs.createIndex(

@@ -64,6 +64,35 @@ public final class MallApiClient {
     public List<AdminItemView> adminItems() {
         return request("GET", "/api/admin/items", null, new TypeToken<List<AdminItemView>>(){}.getType());
     }
+    public AdminUserSummary updateUser(long id,String role,int status) {
+        return request("PUT","/api/admin/users/"+id,Map.of("role",role,"status",status),AdminUserSummary.class);
+    }
+    public List<OrderView> adminOrders(Long userId,OrderFilter filter) {
+        List<String> fields=new ArrayList<>();
+        if(userId!=null)fields.add("userId="+userId);
+        if(filter.status()!=null)fields.add("status="+filter.status());
+        if(filter.startDate()!=null)fields.add("from="+filter.startDate());
+        if(filter.endDate()!=null)fields.add("through="+filter.endDate());
+        return request("GET","/api/admin/orders"+(fields.isEmpty() ? "" : "?"+String.join("&",fields)),null,
+                new TypeToken<List<OrderView>>(){}.getType());
+    }
+    public OrderView processOrder(long id,int status) {
+        return request("PUT","/api/admin/orders/"+id+"/status",Map.of("status",status),OrderView.class);
+    }
+    public List<CommentView> myComments() {
+        return request("GET","/api/me/comments",null,new TypeToken<List<CommentView>>(){}.getType());
+    }
+    public List<CommentView> adminComments() {
+        return request("GET","/api/admin/comments",null,new TypeToken<List<CommentView>>(){}.getType());
+    }
+    public CommentView updateComment(String id,String content,int rating,String tags) {
+        return request("PUT","/api/me/comments/"+id,Map.of("content",content,"rating",rating,"tags",tags),CommentView.class);
+    }
+    public boolean deleteComment(String id,boolean administrator) {
+        com.google.gson.JsonObject result=request("DELETE",(administrator ? "/api/admin/comments/" : "/api/me/comments/")+id,
+                Map.of(),com.google.gson.JsonObject.class);
+        return result.get("deleted").getAsBoolean();
+    }
     public AdminItemView createItem(String title, long categoryId, BigDecimal price, int status) {
         return request("POST", "/api/admin/items", new ItemFields(title, categoryId, price, status), AdminItemView.class);
     }

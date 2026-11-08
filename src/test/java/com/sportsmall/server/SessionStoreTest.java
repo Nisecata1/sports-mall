@@ -12,16 +12,16 @@ class SessionStoreTest {
         SessionStore store = new SessionStore();
         String first = store.create(user), second = store.create(user);
         assertTrue(first.matches("[A-Za-z0-9_-]{43}"));
-        assertNotEquals(first, second); assertEquals(user, store.require(first).user);
-        assertThrows(ApiProblem.class, () -> store.require(null));
-        assertThrows(ApiProblem.class, () -> store.require("invented"));
+        assertNotEquals(first, second); assertEquals(user, store.find(first).orElseThrow().user);
+        assertTrue(store.find(null).isEmpty());
+        assertTrue(store.find("invented").isEmpty());
     }
     @Test void logoutInvalidatesOnlyItsSession() {
         SessionStore store = new SessionStore();
         String first=store.create(user), second=store.create(user);
         store.remove(first);
-        assertEquals(401, assertThrows(ApiProblem.class, () -> store.require(first)).status);
-        assertEquals(user, store.require(second).user);
+        assertTrue(store.find(first).isEmpty());
+        assertEquals(user, store.find(second).orElseThrow().user);
     }
     @Test void expiryUsesServerTimeAndIsNotExtendedByReading() {
         AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2026-11-06T00:00:00Z"));
@@ -32,8 +32,8 @@ class SessionStoreTest {
         };
         SessionStore store = new SessionStore(clock, Duration.ofMinutes(1));
         String token=store.create(user);
-        now.set(now.get().plusSeconds(59)); assertEquals(user, store.require(token).user);
+        now.set(now.get().plusSeconds(59)); assertEquals(user, store.find(token).orElseThrow().user);
         now.set(now.get().plusSeconds(1));
-        assertEquals(401, assertThrows(ApiProblem.class, () -> store.require(token)).status);
+        assertTrue(store.find(token).isEmpty());
     }
 }
