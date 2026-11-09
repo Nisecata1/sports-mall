@@ -58,6 +58,8 @@ INSERT INTO items(title,category_id,price,status) VALUES('训练篮球',1,100.00
     run(shell+["--file",repo/"src/main/resources/sql/mongodb_init.js"],log="mongo-fixtures.log")
     run(shell+["--file",repo/"src/main/resources/sql/mongodb_comment_indexes.js"],log="mongo-comment-indexes.log")
     run(shell+["--file",repo/"src/main/resources/sql/mongodb_log_indexes.js"],log="mongo-log-indexes.log")
+    # SQL夹具已创建商品1，测试扩展详情显式放在夹具中。
+    run(shell+["--eval",'db.getSiblingDB("sports_mall").item_details.insertOne({item_id:Long("1"),description:"训练用篮球，适合日常运球与投篮练习。",images:[],metadata:{language:"zh-CN"}})'],log="mongo-detail-fixture.log")
     classpath=str(repo/"target/test-classes")+os.pathsep+str(repo/"target"/f"sports-mall-{version}.jar")
     output=run([java,"-Dfile.encoding=UTF-8","-Dstdout.encoding=UTF-8","-Dstderr.encoding=UTF-8",
         "-Dmall.desktop.jar="+str(repo/"target"/f"sports-mall-{version}-desktop.jar"),

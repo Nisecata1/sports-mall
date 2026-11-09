@@ -1,5 +1,6 @@
 /target/
 /output/
+/.chart-data-*/
 /scripts/__pycache__/
 /.idea/
 /.classpath

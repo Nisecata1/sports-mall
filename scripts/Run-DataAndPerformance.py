@@ -75,9 +75,8 @@ try:
     run(mysql, input=b"USE sports_mall; INSERT INTO users(username,password_hash,email,role) VALUES('isolated_operator','ISOLATED_NO_LOGIN','operator@example.invalid','ADMIN');", name="admin-fixture.log")
     for name in ("mongodb_init.js", "mongodb_comment_indexes.js", "mongodb_log_indexes.js"):
         run(shell + ["--file", repo / "src/main/resources/sql" / name], name=name + ".log")
-    # 初始化脚本有一条item_id=1详情。它没有对应临时SQL商品，演示工具不覆盖它。
-    # 删除仅限自己创建的临时库中此条历史初始化夹具，使跨库引用断言有意义。
-    run(shell + ["--eval", 'db.getSiblingDB("sports_mall").item_details.deleteOne({item_id:Long("1")});'], name="owned-fixture-adjustment.log")
+    empty_details = run(shell + ["--eval", 'print(db.getSiblingDB("sports_mall").item_details.countDocuments({}));'], name="fresh-init-check.log")
+    assert empty_details.strip() == "0", "Structure initialization must wait for actual SQL item IDs"
     # 在第二份档案写入时失败，证明同一SQL事务内已插入的用户/分类/档案也会撤销。
     run(mysql, input=b"USE sports_mall;\nDELIMITER $$\nCREATE TRIGGER seed_failure BEFORE INSERT ON profiles FOR EACH ROW BEGIN IF NEW.user_id>=3 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='SEED_INJECTED_PROFILE_FAILURE'; END IF; END$$\nDELIMITER ;\n", name="seed-failure-trigger.log")
     failed = run(jvm + [repo / "scripts/java/CourseDataTool.java", "--isolated", sqlport, mongoport, out / "seed-rejected.json"], timeout=90, name="seed-sql-rejected.log", env=env, check=False)

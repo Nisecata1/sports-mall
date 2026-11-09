@@ -26,6 +26,14 @@ public class CourseDataTool {
     static final String[] COLLECTIONS={"item_details","comments","action_logs","system_logs"};
     static final Map<String,String> PRIMARY=Map.of("users","user_id","profiles","profile_id",
             "categories","category_id","items","item_id","orders","order_id");
+    static final Map<String,String> COUNT_SQL=Map.of(
+            "users","SELECT COUNT(*) FROM users", "profiles","SELECT COUNT(*) FROM profiles",
+            "categories","SELECT COUNT(*) FROM categories", "items","SELECT COUNT(*) FROM items",
+            "orders","SELECT COUNT(*) FROM orders", "log_import_rows","SELECT COUNT(*) FROM log_import_rows");
+    static final Map<String,String> SNAPSHOT_SQL=Map.of(
+            "users","SELECT * FROM users", "profiles","SELECT * FROM profiles",
+            "categories","SELECT * FROM categories", "items","SELECT * FROM items",
+            "orders","SELECT * FROM orders", "log_import_rows","SELECT * FROM log_import_rows");
     public static void main(String[] args) throws Exception {
         if(args.length!=4 || !Set.of("--apply-course","--isolated").contains(args[0]))
             throw new IllegalArgumentException("mode mysqlPort mongoPort report.json");
@@ -122,8 +130,10 @@ public class CourseDataTool {
                 if(receipt.pending()!=0 || receipt.synced()!=101) throw new IllegalStateException("Log import pending; rerun the same tool to resume");
                 report.put("log_import",receipt); report.put("demo_users",users); report.put("demo_items",items); report.put("demo_orders",orders);
                 List<String> indexes=new ArrayList<>();
-                ensureIndex(c,"items","idx_items_sale_category_price","status,category_id,price,item_id",indexes);
-                ensureIndex(c,"orders","idx_orders_user_status_created","user_id,status,created_at,order_id",indexes);
+                ensureIndex(c,"items","idx_items_sale_category_price","status,category_id,price,item_id",
+                        "CREATE INDEX idx_items_sale_category_price ON items(status,category_id,price,item_id)",indexes);
+                ensureIndex(c,"orders","idx_orders_user_status_created","user_id,status,created_at,order_id",
+                        "CREATE INDEX idx_orders_user_status_created ON orders(user_id,status,created_at,order_id)",indexes);
                 report.put("index_actions",indexes);
                 report.put("after",counts(c,db));
                 boolean preserved=preserved(oldSql,sqlFingerprints(c)) && preserved(oldMongo,mongoFingerprints(db));
@@ -155,7 +165,7 @@ public class CourseDataTool {
     }
     static Map<String,Long> counts(Connection c,MongoDatabase db) throws Exception {
         Map<String,Long> result=new LinkedHashMap<>();
-        for(String table:TABLES)try(var p=c.prepareStatement("SELECT COUNT(*) FROM "+table);var r=p.executeQuery()){r.next();result.put("mysql."+table,r.getLong(1));}
+        for(String table:TABLES)try(var p=c.prepareStatement(COUNT_SQL.get(table));var r=p.executeQuery()){r.next();result.put("mysql."+table,r.getLong(1));}
         for(String col:COLLECTIONS)result.put("mongo."+col,db.getCollection(col).countDocuments()); return result;
     }
     static boolean quotas(Connection c,MongoDatabase db) throws Exception {
@@ -164,7 +174,7 @@ public class CourseDataTool {
     static String hash(String text) throws Exception {return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));}
     static Map<String,String> sqlFingerprints(Connection c) throws Exception {
         Map<String,String> result=new TreeMap<>();
-        for(String table:TABLES)try(var p=c.prepareStatement("SELECT * FROM "+table);var r=p.executeQuery()) {
+        for(String table:TABLES)try(var p=c.prepareStatement(SNAPSHOT_SQL.get(table));var r=p.executeQuery()) {
             int columns=r.getMetaData().getColumnCount();
             while(r.next()) {String key=table+":"+(table.equals("log_import_rows")?r.getString("batch_id")+":"+r.getInt("row_no"):r.getString(PRIMARY.get(table)));
                 List<String> fields=new ArrayList<>();for(int i=1;i<=columns;i++)fields.add(r.getString(i));
@@ -175,14 +185,14 @@ public class CourseDataTool {
         Map<String,String> result=new TreeMap<>();for(String col:COLLECTIONS)for(Document doc:db.getCollection(col).find())result.put(col+":"+doc.get("_id"),hash(doc.toJson()));return result;
     }
     static boolean preserved(Map<String,String> old,Map<String,String> current) {return old.entrySet().stream().allMatch(e->Objects.equals(e.getValue(),current.get(e.getKey())));}
-    static void ensureIndex(Connection c,String table,String name,String columns,List<String> actions)throws Exception {
+    static void ensureIndex(Connection c,String table,String name,String columns,String ddl,List<String> actions)throws Exception {
         try(var p=c.prepareStatement("SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX),MIN(NON_UNIQUE) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?")) {
             p.setString(1,table);p.setString(2,name);try(var r=p.executeQuery()){r.next();String actual=r.getString(1);
                 if(actual!=null){if(!actual.equals(columns)||r.getInt(2)!=1)throw new IllegalStateException("Index definition mismatch: "+name);actions.add(name+": already present");return;}
             }
         }
-        // 标识符只来自以上两个固定调用，业务输入不拼接进SQL。
-        try(var p=c.prepareStatement("CREATE INDEX "+name+" ON "+table+"("+columns+")")){p.execute();}
+        // DDL来自两个固定SQL模板，元数据查询中的表名、索引名使用参数绑定。
+        try(var p=c.prepareStatement(ddl)){p.execute();}
         actions.add(name+": created");
     }
 }

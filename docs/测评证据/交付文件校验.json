@@ -1,0 +1,101 @@
+{
+  "version": "0.3.3",
+  "scope": "正式PDF、图片和PPTX的实际文件字节。源码与文字源稿由Git记录。",
+  "files": [
+    {
+      "path": "docs/images/主库数量截图.png",
+      "bytes": 114327,
+      "sha256": "72e1c87616e496d90a65e6812b68a2545f9a3b4f030c8394c07469ed495f694a"
+    },
+    {
+      "path": "docs/MongoDB集合设计.pdf",
+      "bytes": 88295,
+      "sha256": "cba0835a7b782310de8ec498ac269d4749f83a3a11173947f63af86081a7f1a5"
+    },
+    {
+      "path": "docs/MySQL_E-R图.pdf",
+      "bytes": 36018,
+      "sha256": "b0dfea8d666515614e8ba48b9fc7ec416ee80fa4721a546f529770bbcd418cd3"
+    },
+    {
+      "path": "docs/MySQL_E-R图.png",
+      "bytes": 176370,
+      "sha256": "0f2158b61f016a2d6795263854801a9c09f0fb69826032b5ab48141c49ca560b"
+    },
+    {
+      "path": "docs/关系概览.pdf",
+      "bytes": 32295,
+      "sha256": "a9ae96d8e1ee583c45e7bbe4ea7d779e5f541c860918a61db80c6a18aac20a9d"
+    },
+    {
+      "path": "docs/关系概览.png",
+      "bytes": 58244,
+      "sha256": "f9eeeaceef5c338d06d2d196e49e9f9e1112728912bd995156f8966a4f4762ee"
+    },
+    {
+      "path": "docs/性能优化报告.pdf",
+      "bytes": 93877,
+      "sha256": "a4f0cda42cc11ac278173377a1fd1a0745904619d5f3348d9f6ea9552cce1890"
+    },
+    {
+      "path": "docs/技术设计文档.pdf",
+      "bytes": 491170,
+      "sha256": "3b4c7122bbe7c68adecf399a9c81038da56cead73e8fcc009f7089f17b49c1c3"
+    },
+    {
+      "path": "docs/日志导入流程.pdf",
+      "bytes": 37369,
+      "sha256": "06ee93df75776162fbdd9b972726815257c15454b1f1a651b061984005c67284"
+    },
+    {
+      "path": "docs/日志导入流程.png",
+      "bytes": 59488,
+      "sha256": "9894d64e83e69b8c793fbc79b7d93f09aa3df836302ac605d849be97a569e833"
+    },
+    {
+      "path": "docs/架构图.pdf",
+      "bytes": 47205,
+      "sha256": "23d3c4f8eb6d25b21d8e2b81864f03d03197062475ab53852f043cdfeea7c273"
+    },
+    {
+      "path": "docs/架构图.png",
+      "bytes": 115469,
+      "sha256": "291ff29f58aae97fd1ad3854d6859624d03467f990dedbc78f613108238b8ecb"
+    },
+    {
+      "path": "docs/测试报告.pdf",
+      "bytes": 110775,
+      "sha256": "3c9ff7bc3e730e8cb4ecdf8492928949079cb198308e87524ec39fee57a434a3"
+    },
+    {
+      "path": "docs/用户手册.pdf",
+      "bytes": 112094,
+      "sha256": "65d3df6b5f55fe1957f4159402a23c43d297fe49dfb9d26850e0594f5e4217cc"
+    },
+    {
+      "path": "docs/订单事务流程.pdf",
+      "bytes": 39205,
+      "sha256": "815e3a771287fd11ca2da47835ba1436de5fb5d58f029d388ff34e2a3edc51f4"
+    },
+    {
+      "path": "docs/订单事务流程.png",
+      "bytes": 64466,
+      "sha256": "a348f6bccee800c7e326ba1f5ff7ed4e382e34fd4c90b1ad33aa8749a96bef42"
+    },
+    {
+      "path": "docs/需求规格说明书.pdf",
+      "bytes": 119158,
+      "sha256": "4a445fe78617055e6812fb30510115797afa97951bd7194ffb43a07c0920734c"
+    },
+    {
+      "path": "docs/项目总结报告.pdf",
+      "bytes": 99083,
+      "sha256": "30e9998f9df20912f76188b8c735b6f594839ca4c16aabd167d808ecf3ebbeba"
+    },
+    {
+      "path": "docs/项目答辩.pptx",
+      "bytes": 188504,
+      "sha256": "4718ddb533e12071e25c341e5d78a8c4ad0cfdb0b554095a9a3fe6350c5aba3c"
+    }
+  ]
+}

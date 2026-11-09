@@ -1,0 +1,293 @@
+{
+  "version": "0.3.3",
+  "recorded_at": "2026-11-09T19:26:24.978367+08:00",
+  "base_commit": "4b1376a3699496494c44acc72d7fa3c035a34704",
+  "junit": [
+    {
+      "suite": "com.sportsmall.api.ApiJsonTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.client.MallApiClientTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.dao.mongo.ActionLogDaoTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.dao.mongo.CommentDaoTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.dao.mongo.CommentStatisticsDaoTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.dao.mongo.ItemDetailDaoTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.dao.mongo.SystemLogDaoTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.dao.mongo.UserActivityDaoTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.model.ItemFilterTest",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.model.OrderFilterTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.server.RequestAuthenticationTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.server.RequestLoggingFilterTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.server.SessionStoreTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.AccountOverviewServiceTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.AdminItemDetailServiceTest",
+      "tests": 24,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.AdminItemServiceTest",
+      "tests": 21,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.AdminMaintenanceServiceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.AdminUserServiceTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.BrowsingServiceTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.CategoryServiceTest",
+      "tests": 22,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.CommentManagementServiceTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.CommentServiceTest",
+      "tests": 16,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.HotRankingServiceTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.ItemSearchServiceTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.LogImportParserTest",
+      "tests": 17,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.MonthlyOrderServiceTest",
+      "tests": 18,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.OrderServiceTest",
+      "tests": 19,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.ProfileServiceTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.StatisticsServiceTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.UserAccountServiceTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.UserActivityServiceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.UserLoginServiceTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.service.UserRegistrationServiceTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.util.CategoryTreesTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.util.JdbcTransactionsTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "suite": "com.sportsmall.util.PasswordHasherTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0
+    }
+  ],
+  "junit_total": 342,
+  "http_database_checks": 427,
+  "integration_log_sha256": "e5729dd59eacf8c7281a8fc03623f83d09c4b201c266b1df909c21c615f74fc1",
+  "selected_passes": [
+    "PASS concurrent first saves create one profile",
+    "PASS concurrent save returns one complete submission rather than mixed fields",
+    "PASS database edit failure is reported",
+    "PASS database delete failure is reported",
+    "PASS opposing concurrent moves cannot both succeed",
+    "PASS concurrent moves leave an acyclic tree",
+    "PASS database insert failure is reported",
+    "PASS database product update failure is reported",
+    "PASS relative URL gives validation error instead of server failure [INVALID_DETAIL_IMAGES]",
+    "PASS index precondition failures preserve detail",
+    "PASS failed single-document update makes no partial field changes",
+    "PASS partial update preserves extras and expected BSON types",
+    "PASS concurrent order processing has one winner and one rejected transition",
+    "PASS SQL readback retains order identity amount and creation time under concurrent change",
+    "PASS database failure reports unconfirmed account write",
+    "PASS concurrent cross-demotion rechecks actor role under row locks",
+    "PASS concurrent comment edit and deletion cannot resurrect document",
+    "PASS ordinary role cannot query audit",
+    "PASS repeat import reuses canonical batch without duplicates",
+    "PASS read-only log query does not recursively generate audit",
+    "PASS JDBC batch failure is reported",
+    "PASS failed JDBC batch rolls back every staged row",
+    "PASS partial Mongo failure does not claim whole batch succeeded",
+    "PASS synthetic failure actually produced a partial cross-database state",
+    "PASS retry repairs partially written Mongo batch without duplicating successful rows",
+    "PASS Mongo success with SQL mark failure remains explicitly pending",
+    "PASS retry after SQL mark failure acknowledges existing Mongo row once",
+    "PASS PreparedStatement batch crosses 50-row execution boundary",
+    "PASS concurrent identical imports converge to one log",
+    "PASS audit failure does not report committed MySQL update as rolled back",
+    "PASS role revoked after login cannot view audit"
+  ],
+  "git_commits_before_this_delivery": 34,
+  "author_dates_shanghai": {
+    "2026-10-27": 3,
+    "2026-10-28": 1,
+    "2026-10-30": 1,
+    "2026-10-31": 4,
+    "2026-11-01": 1,
+    "2026-11-02": 1,
+    "2026-11-03": 5,
+    "2026-11-04": 2,
+    "2026-11-06": 4,
+    "2026-11-07": 5,
+    "2026-11-08": 6,
+    "2026-11-09": 1
+  },
+  "first_day_assumed": "2026-10-27",
+  "missing_first_eleven_calendar_days": [
+    "2026-10-29",
+    "2026-11-05"
+  ],
+  "user_mysql_screenshot": "images/主库数量截图.png",
+  "main_database_receipts": [
+    "主库数据准备-first.json",
+    "主库数据准备-repeat.json"
+  ],
+  "presentation_check": {
+    "OpenedInPowerPoint": true,
+    "Slides": 12,
+    "NativeCharts": 3,
+    "NativeTables": 3,
+    "ExportedPngs": 12,
+    "PowerPointVersion": "16.0",
+    "PptxSha256": "4718DDB533E12071E25C341E5D78A8C4AD0CFDB0B554095A9A3FE6350C5ABA3C"
+  }
+}

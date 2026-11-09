@@ -1,9 +1,9 @@
 {
-  "run_at": "2026-11-08T16:06:24.888916500Z",
+  "run_at": "2026-11-09T10:48:27.169411100Z",
   "source": "COURSE_DEMO_V1",
   "mode": "--isolated",
-  "mysql_port": 43269,
-  "mongo_port": 43270,
+  "mysql_port": 3938,
+  "mongo_port": 3939,
   "before": {
     "mysql.users": 11,
     "mysql.profiles": 10,

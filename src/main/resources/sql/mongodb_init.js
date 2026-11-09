@@ -1,9 +1,5 @@
-// 项目011：MongoDB 阶段性初始化脚本，供 mongosh 执行，Java 不会自动执行。
-// 当前范围：四个业务集合、首批查询索引、训练篮球的一条详情。
-// comments、action_logs、system_logs 本轮只建集合与索引，暂不填充用户相关记录。
-// 完整初始化仍须补齐各集合测试数据；本文件不表示数据量、聚合或业务功能全部完成。
-// item_id=1 来自用户已确认的 MySQL 商品；MongoDB 不会自动检查跨库外键。
-// 重复运行保留已有详情，不清库、不覆盖后续业务修改。
+// 项目011 MongoDB结构初始化，建立四个集合及查询索引。
+// 商品关联数据由CourseDataTool或业务界面使用实际MySQL编号写入。
 (() => {
     const mallDb = db.getSiblingDB("sports_mall");
 
@@ -56,25 +52,6 @@
         { name: "idx_system_user_time" }
     );
 
-    // 3. 仅在这件商品还没有详情时插入；Long 与 MySQL BIGINT 对应。
-    // 没有实际图片时保留空数组，不填写无法访问的示例图片地址。
-    const result = mallDb.item_details.updateOne(
-        { item_id: Long("1") },
-        {
-            $setOnInsert: {
-                description: "训练用篮球，适合日常运球与投篮练习。",
-                images: [],
-                metadata: { language: "zh-CN" }
-            }
-        },
-        { upsert: true }
-    );
-
-    // 4. 显示实际写入结果与刚保存的文档，不使用固定的“成功”输出替代结果。
-    print("初始化写入结果：");
-    printjson(result);
-    print("训练篮球的实际详情：");
-    printjson(mallDb.item_details.findOne({ item_id: Long("1") }));
     print("当前集合：");
     printjson(mallDb.getCollectionNames());
     print("各业务集合的实际文档数（空集合允许为0，不能据此声称测试数据量达标）：");
