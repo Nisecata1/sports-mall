@@ -68,11 +68,11 @@ class RequestAuthenticationTest {
     }
 
     @Test void onlyExactPublicPathsBypassTheEntryLoginRequirement() {
-        for (String path : List.of("/api/health", "/api/auth/login", "/api/auth/register")) {
+        for (String path : List.of("/api/health", "/api/ready", "/api/auth/login", "/api/auth/register")) {
             assertFalse(MallApiServer.requiresLogin(path), path);
         }
         for (String path : List.of("/api/me", "/api/admin/items", "/api/orders", "/api/new-feature",
-                "/api/auth/logout", "/api/auth/login/extra", "/api/health/extra")) {
+                "/api/auth/logout", "/api/auth/login/extra", "/api/health/extra", "/api/ready/extra")) {
             assertTrue(MallApiServer.requiresLogin(path), path);
         }
         assertFalse(MallApiServer.requiresLogin("/unknown"));

@@ -33,9 +33,11 @@ public final class MallServices implements AutoCloseable {
     final AdminUserMutationService userMaintenance;
     final AdminLogService logManagement;
     final SystemLogDao systemLogs;
+    final DatabaseReadiness readiness;
 
     public MallServices(HikariDataSource sql, MongoClient mongo, MongoDatabase database) {
         this.sql = sql; this.mongo = mongo;
+        readiness = new DatabaseReadiness(sql, database);
         UserDao users = new UserDao(sql); ItemDao items = new ItemDao(sql);
         CommentDao commentDao = new CommentDao(database); ActionLogDao actions = new ActionLogDao(database);
         registration = new UserRegistrationService(users);

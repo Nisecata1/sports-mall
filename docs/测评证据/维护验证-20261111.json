@@ -1,0 +1,184 @@
+{
+  "date": "2026-11-11",
+  "verified_at": "2026-11-11T10:08:40.0450180Z",
+  "version": "0.3.3",
+  "baseline_commit": "6ff6613b9e03c53bf46a3d6676e37dff403bce30",
+  "junit": {
+    "skipped": 0,
+    "failures": 0,
+    "errors": 0,
+    "tests": 350
+  },
+  "http_isolated_checks": 445,
+  "temporary_databases_cleaned": true,
+  "main_database_written_this_run": false,
+  "catalog_tool_compiled": true,
+  "catalog_data_receipt_date": "2026-11-10",
+  "powershell_syntax_checked": [
+    "Check-Environment.ps1",
+    "Start-Backend.ps1",
+    "Enrich-CourseData.ps1"
+  ],
+  "scenario_passes": [
+    "PASS health reports packaged build metadata",
+    "PASS readiness HTTP=200 SQL=UP Mongo=UP",
+    "PASS readiness exposes fixed status fields only",
+    "PASS environment script reports overall readiness=true",
+    "PASS environment script verifies backend connection rather than TCP only",
+    "PASS readiness accepts GET only",
+    "PASS readiness public exception is exact path only",
+    "PASS readiness HTTP=200 SQL=UP Mongo=UP",
+    "PASS readiness exposes fixed status fields only",
+    "PASS readiness HTTP=503 SQL=UP Mongo=DOWN",
+    "PASS readiness exposes fixed status fields only",
+    "PASS environment script reports overall readiness=false",
+    "PASS environment script verifies backend connection rather than TCP only",
+    "PASS liveness remains available after dependency failure",
+    "PASS readiness HTTP=503 SQL=DOWN Mongo=DOWN",
+    "PASS readiness exposes fixed status fields only",
+    "PASS readiness HTTP=503 SQL=DOWN Mongo=UP",
+    "PASS readiness exposes fixed status fields only"
+  ],
+  "before_commit_history": {
+    "total_commits": 35,
+    "unique_dates": 12,
+    "dates": [
+      {
+        "date": "2026-10-27",
+        "commits": 3
+      },
+      {
+        "date": "2026-10-28",
+        "commits": 1
+      },
+      {
+        "date": "2026-10-30",
+        "commits": 1
+      },
+      {
+        "date": "2026-10-31",
+        "commits": 4
+      },
+      {
+        "date": "2026-11-01",
+        "commits": 1
+      },
+      {
+        "date": "2026-11-02",
+        "commits": 1
+      },
+      {
+        "date": "2026-11-03",
+        "commits": 5
+      },
+      {
+        "date": "2026-11-04",
+        "commits": 2
+      },
+      {
+        "date": "2026-11-06",
+        "commits": 4
+      },
+      {
+        "date": "2026-11-07",
+        "commits": 5
+      },
+      {
+        "date": "2026-11-08",
+        "commits": 6
+      },
+      {
+        "date": "2026-11-09",
+        "commits": 2
+      }
+    ],
+    "first_eleven_day_missing": [
+      "2026-10-29",
+      "2026-11-05"
+    ]
+  },
+  "source_hashes": [
+    {
+      "path": "pom.xml",
+      "sha256": "6d75896a7d02427d40c612f7d31357ae4b474ec2aa4eda00ff6805b0daaa0293"
+    },
+    {
+      "path": "Check-Environment.ps1",
+      "sha256": "3a6442434157d7c51f14a6a108e09bf5bf236a48b23a2d64b2aeed2da55a4a58"
+    },
+    {
+      "path": "Check-Environment.cmd",
+      "sha256": "7022b6f9f591a98421108050a3c6533f5ee7544036f8af3faefcc8b0f4c96ea7"
+    },
+    {
+      "path": "Start-Backend.ps1",
+      "sha256": "20dc29e189152515b4b293d970228d52dad5861bc6882ef1092d821ffc69609f"
+    },
+    {
+      "path": "src/main/java/com/sportsmall/server/BuildInfo.java",
+      "sha256": "e40a8766275db86eb20c637213a9726cb71e29beb43d9b8efbb9b27c26a69b73"
+    },
+    {
+      "path": "src/main/java/com/sportsmall/server/DatabaseReadiness.java",
+      "sha256": "82364829bf8b044c674bbaa61f75cc0ec41aeaf4a79e68a5129822bc8c4987f3"
+    },
+    {
+      "path": "src/main/java/com/sportsmall/server/MallApiServer.java",
+      "sha256": "af3979e01b2bd0b1b9d284f55b771d27d083e9819cc573c140a5412f856c00f3"
+    },
+    {
+      "path": "src/main/java/com/sportsmall/server/MallServices.java",
+      "sha256": "6bd79ad724df3708b2904e9f5f8d146aa07924ad64a0507ae77259d67812d8de"
+    },
+    {
+      "path": "src/main/java/com/sportsmall/server/MallServerMain.java",
+      "sha256": "185cbe2b47b6b4ae46d901fd881828c11cb11956dd6b7f8684b7f7659ecf7fe3"
+    },
+    {
+      "path": "src/main/java/com/sportsmall/server/RequestLoggingFilter.java",
+      "sha256": "061888804b54095861b5c3c868efe5dd9cc9ad4af83ebba7bb02daa3dccdad75"
+    },
+    {
+      "path": "src/main/resources/build-info.properties",
+      "sha256": "3ba51777e7300e862987dfebc8f62e27a32220732ff43350a74fa2cc7203daa7"
+    },
+    {
+      "path": "src/test/java/com/sportsmall/integration/ReadinessIntegrationChecks.java",
+      "sha256": "7f04d10ba415368a7e6327aa6c3c4e09c58b17945ba7d4581ce7cc1664007508"
+    },
+    {
+      "path": "src/test/java/com/sportsmall/integration/HttpIntegrationProbe.java",
+      "sha256": "7a28c862f85d60b2aca481e2e59e8094ef3e25a9e660c2af63cbcbc003fd1302"
+    },
+    {
+      "path": "src/test/java/com/sportsmall/server/BuildInfoTest.java",
+      "sha256": "56b6cf4ea5538557c417651a909e83662f7f27fe4c61dbfc3b8cec69898b2042"
+    },
+    {
+      "path": "src/test/java/com/sportsmall/server/DatabaseReadinessTest.java",
+      "sha256": "31a120502dceca2768620f3b56aa6dec8467fc0c39bed91fc84ffedd366a94f4"
+    },
+    {
+      "path": "src/test/java/com/sportsmall/server/RequestAuthenticationTest.java",
+      "sha256": "28ce9fca168df34ab90a422ded63c1d2650855b173f4740a641ccfd23972eb53"
+    },
+    {
+      "path": "Enrich-CourseData.ps1",
+      "sha256": "89fbc7247af3af269e67cf9881d82ce538b626f4feab981faf2e68679ae03c21"
+    },
+    {
+      "path": "scripts/java/CourseCatalogEnricher.java",
+      "sha256": "7be6550d22dafeabb8c1090794b4accd1a2dd86b9dc6e8def60de6fe41214b81"
+    }
+  ],
+  "logs": [
+    "target/maintenance-20261111-build.log",
+    "target/maintenance-20261111-integration.log"
+  ],
+  "limitations": [
+    "Database readiness validates connections, not every schema object or business operation",
+    "Failure checks close owned test clients/pools; no main database shutdown",
+    "Prior catalog execution receipt is historical, not a new main database run",
+    "Manual user acceptance of the new diagnostic entry is pending"
+  ]
+}

@@ -17,6 +17,7 @@ final class RequestLoggingFilter extends Filter {
     private static final Set<String> METHODS = Set.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS", "HEAD");
     private static final Map<String, String> OPERATIONS = Map.ofEntries(
             Map.entry("/api/health", "检查后端状态"),
+            Map.entry("/api/ready", "检查后端数据库连通性"),
             Map.entry("/api/auth/register", "注册商城账号"),
             Map.entry("/api/auth/login", "登录商城"),
             Map.entry("/api/auth/logout", "退出登录"),

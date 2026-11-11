@@ -36,6 +36,7 @@ public final class MallServerMain {
         }, "mall-backend-shutdown"));
         server.start();
         LOG.info("商城后端已启动，地址 http://127.0.0.1:{}", server.port());
+        LOG.info("运行版本={}，构建时间={}（UTC）", BuildInfo.current().version(), BuildInfo.current().builtAt());
         LOG.info("等待商城窗口请求，使用 Ctrl+C 结束后端");
         new CountDownLatch(1).await();
     }

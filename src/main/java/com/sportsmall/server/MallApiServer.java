@@ -18,7 +18,7 @@ import java.util.concurrent.*;
 public final class MallApiServer implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(MallApiServer.class);
     private static final int MAX_BODY = 32768;
-    private static final Set<String> PUBLIC_API_PATHS = Set.of("/api/health", "/api/auth/login", "/api/auth/register");
+    private static final Set<String> PUBLIC_API_PATHS = Set.of("/api/health", "/api/ready", "/api/auth/login", "/api/auth/register");
     private final HttpServer server;
     private final ExecutorService executor;
     private final MallServices services;
@@ -44,7 +44,8 @@ public final class MallApiServer implements AutoCloseable {
             }
             Object result = route(exchange, identity);
             auditSuccessfulWrite(exchange, identity);
-            respond(exchange, 200, result);
+            int status = result instanceof DatabaseReadiness.Report report ? report.httpStatus() : 200;
+            respond(exchange, status, result);
         } catch (ApiProblem problem) {
             respond(exchange, problem.status, new ApiDtos.ErrorResponse(problem.code, problem.getMessage()));
         } catch (MallBusinessException problem) {
@@ -75,7 +76,11 @@ public final class MallApiServer implements AutoCloseable {
         String method = exchange.getRequestMethod();
         if (path.equals("/api/health")) {
             requireMethod(method, "GET");
-            return Map.of("application", "sports-mall", "version", "0.3.1", "status", "UP");
+            return BuildInfo.current().health();
+        }
+        if (path.equals("/api/ready")) {
+            requireMethod(method, "GET");
+            return services.readiness.check();
         }
         if (path.equals("/api/auth/login")) {
             requireMethod(method, "POST");
